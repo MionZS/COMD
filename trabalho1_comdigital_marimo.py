@@ -166,6 +166,9 @@ def _(
 @app.cell
 def _(Tb_s, plt, pulses, results, schemes):
     NUM_BITS_TO_SHOW = 10
+    _max_pulse_width = Tb_s
+    _time_margin = 0.08 * _max_pulse_width
+    _time_limit = NUM_BITS_TO_SHOW * Tb_s + _time_margin
     _fig, _axes = plt.subplots(3, 3, figsize=(15, 9), sharex=True)
 
     _scheme_keys = list(schemes.keys())
@@ -176,7 +179,7 @@ def _(Tb_s, plt, pulses, results, schemes):
             _ax = _axes[_i, _j]
             _time = results[_scheme][_pulse_name]["time"]
             _signal = results[_scheme][_pulse_name]["signal"]
-            _mask = _time < NUM_BITS_TO_SHOW * Tb_s
+            _mask = _time < _time_limit
             _ax.plot(_time[_mask], _signal[_mask], linewidth=1.6)
             _ax.grid(True, alpha=0.35)
             if _i == 0:
@@ -187,6 +190,55 @@ def _(Tb_s, plt, pulses, results, schemes):
                 _ax.set_xlabel("Tempo [s]")
 
     _fig.suptitle("Códigos de linha no domínio do tempo (0 a 10Tb)")
+    plt.tight_layout()
+    plt.show()
+    return
+
+
+@app.cell
+def _(Tb_s, np, plt):
+    _pulse_widths = {
+        "rect_Tb_2": Tb_s / 2,
+        "rect_Tb": Tb_s,
+        "half_sine": Tb_s,
+    }
+    _pulse_labels = {
+        "rect_Tb_2": r"$\Pi(2t/T_b)$",
+        "rect_Tb": r"$\Pi(t/T_b)$",
+        "half_sine": r"$\sin(\pi t/T_b)$",
+    }
+
+    _max_width = max(_pulse_widths.values())
+    _x_margin = 0.08 * _max_width
+    _x_end = _max_width + _x_margin
+
+    _t = np.linspace(0.0, _x_end, 1000)
+    _pulse_shapes = {
+        "rect_Tb_2": ((_t >= 0.0) & (_t <= _pulse_widths["rect_Tb_2"])).astype(float),
+        "rect_Tb": ((_t >= 0.0) & (_t <= _pulse_widths["rect_Tb"])).astype(float),
+        "half_sine": np.where(
+            (_t >= 0.0) & (_t <= _pulse_widths["half_sine"]),
+            np.sin(np.pi * _t / Tb_s),
+            0.0,
+        ),
+    }
+
+    _fig, _ax = plt.subplots(figsize=(7.2, 3.4))
+    for _pulse_key in ["rect_Tb_2", "rect_Tb", "half_sine"]:
+        _ax.plot(
+            _t,
+            _pulse_shapes[_pulse_key],
+            linewidth=1.6,
+            label=f"p(t)={_pulse_labels[_pulse_key]}",
+        )
+
+    _ax.set_xlim(0.0, _x_end)
+    _ax.set_ylim(-0.02, 1.05)
+    _ax.set_xlabel("Time (s)")
+    _ax.set_ylabel("Amplitude")
+    _ax.set_title("TE903 - TRABALHO COMPUTACIONAL 1, ABRIL DE 2026")
+    _ax.grid(True, alpha=0.3)
+    _ax.legend(loc="lower right")
     plt.tight_layout()
     plt.show()
     return
