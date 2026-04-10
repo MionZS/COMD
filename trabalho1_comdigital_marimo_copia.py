@@ -84,11 +84,11 @@ def _(N, T, Tb_s, fs_hz, np, welch):
 
     def make_pulse(pulse_name):
         _t = (np.arange(N) - (N - 1) / 2.0) / fs_hz
-        if pulse_name == "rect_Tb_2":
+        if pulse_name == "rect_Tb_half":
             p = (np.abs(_t) <= (Tb_s / 4.0)).astype(float)
         elif pulse_name == "rect_Tb":
             p = (np.abs(_t) <= (Tb_s / 2.0)).astype(float)
-        elif pulse_name == "half_sine":
+        elif pulse_name == "sine_half":
             p = np.zeros(N, dtype=float)
             _mask = np.abs(_t) <= (Tb_s / 2.0)
             p[_mask] = np.cos(np.pi * _t[_mask] / Tb_s)
@@ -156,9 +156,9 @@ def _(
     }
 
     pulses = {
-        "rect_Tb_2": r"$\Pi(2t/T_b)$",
+        "rect_Tb_half": r"$\Pi(2t/T_b)$",
         "rect_Tb": r"$\Pi(t/T_b)$",
-        "half_sine": r"$\sin(\pi t/T_b)$",
+        "sine_half": r"$\sin(\pi t/T_b)$",
     }
 
     results = {}
@@ -196,7 +196,7 @@ def _(Tb_s, plt, pulses, results, schemes):
             _ax = _axes[_i, _j]
             _time = results[_scheme][_pulse_name]["time"]
             _signal = results[_scheme][_pulse_name]["signal"]
-            _mask = _time < _time_limit
+            _mask = (_time >= 0) & (_time < _time_limit)
             _ax.plot(_time[_mask], _signal[_mask], linewidth=1.6)
             _ax.grid(True, alpha=0.35)
             if _i == 0:
@@ -215,14 +215,14 @@ def _(Tb_s, plt, pulses, results, schemes):
 @app.cell
 def _(Tb_s, fs_hz, np, plt):
     _pulse_widths = {
-        "rect_Tb_2": Tb_s / 2,
+        "rect_Tb_half": Tb_s / 2,
         "rect_Tb": Tb_s,
-        "half_sine": Tb_s,
+        "sine_half": Tb_s,
     }
     _pulse_labels = {
-        "rect_Tb_2": r"$\Pi(2t/T_b)$",
+        "rect_Tb_half": r"$\Pi(2t/T_b)$",
         "rect_Tb": r"$\Pi(t/T_b)$",
-        "half_sine": r"$\sin(\pi t/T_b)$",
+        "sine_half": r"$\sin(\pi t/T_b)$",
     }
 
     _max_width = max(_pulse_widths.values())
@@ -236,17 +236,17 @@ def _(Tb_s, fs_hz, np, plt):
     _num_samples = _base_samples + 2 * _edge_samples
     _t = np.linspace(_x_min, _x_max, _num_samples)
     _pulse_shapes = {
-        "rect_Tb_2": np.where(np.abs(_t) <= (_pulse_widths["rect_Tb_2"] / 2.0), 1.0, 0.0),
+        "rect_Tb_half": np.where(np.abs(_t) <= (_pulse_widths["rect_Tb_half"] / 2.0), 1.0, 0.0),
         "rect_Tb": np.where(np.abs(_t) <= (_pulse_widths["rect_Tb"] / 2.0), 1.0, 0.0),
-        "half_sine": np.where(
-            np.abs(_t) <= (_pulse_widths["half_sine"] / 2.0),
+        "sine_half": np.where(
+            np.abs(_t) <= (_pulse_widths["sine_half"] / 2.0),
             np.cos(np.pi * _t / Tb_s),
             0.0,
         ),
     }
 
     _fig, _ax = plt.subplots(figsize=(7.2, 3.4))
-    for _pulse_key in ["rect_Tb_2", "rect_Tb", "half_sine"]:
+    for _pulse_key in ["rect_Tb_half", "rect_Tb", "sine_half"]:
         _ax.plot(
             _t,
             _pulse_shapes[_pulse_key],
