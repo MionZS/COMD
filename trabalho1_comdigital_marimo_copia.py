@@ -213,7 +213,7 @@ def _(Tb_s, plt, pulses, results, schemes):
 
 
 @app.cell
-def _(Tb_s, np, plt):
+def _(Tb_s, fs_hz, np, plt):
     _pulse_widths = {
         "rect_Tb_2": Tb_s / 2,
         "rect_Tb": Tb_s,
@@ -230,10 +230,14 @@ def _(Tb_s, np, plt):
     _x_min = -_max_width / 2.0 - _x_margin
     _x_max = _max_width / 2.0 + _x_margin
 
-    _t = np.linspace(_x_min, _x_max, 1000)
+    _edge_samples = max(12, int(np.ceil(0.5 * fs_hz)))
+    _plot_oversampling = max(600, int(np.ceil(60 * fs_hz)))
+    _base_samples = int(np.ceil((_x_max - _x_min) * _plot_oversampling)) + 1
+    _num_samples = _base_samples + 2 * _edge_samples
+    _t = np.linspace(_x_min, _x_max, _num_samples)
     _pulse_shapes = {
-        "rect_Tb_2": (np.abs(_t) <= (_pulse_widths["rect_Tb_2"] / 2.0)).astype(float),
-        "rect_Tb": (np.abs(_t) <= (_pulse_widths["rect_Tb"] / 2.0)).astype(float),
+        "rect_Tb_2": np.where(np.abs(_t) <= (_pulse_widths["rect_Tb_2"] / 2.0), 1.0, 0.0),
+        "rect_Tb": np.where(np.abs(_t) <= (_pulse_widths["rect_Tb"] / 2.0), 1.0, 0.0),
         "half_sine": np.where(
             np.abs(_t) <= (_pulse_widths["half_sine"] / 2.0),
             np.cos(np.pi * _t / Tb_s),
@@ -287,6 +291,35 @@ def _(fs_hz, plt, pulses, results, schemes):
                 _ax.set_xlabel("Frequência [Hz]")
 
     _fig.suptitle("Densidade espectral de potência via Welch")
+    plt.tight_layout()
+    plt.show()
+    return
+
+
+@app.cell
+def _(Tb_s, np, plt):
+    # Janela fixa baseada na maior largura de pulso (Tb_s ~ 1), mostramos 1.2s
+    window = 1.2
+    samples = 3000
+    t_fixed = np.linspace(-window / 2.0, window / 2.0, samples)
+
+    p_rect_Tb_2 = np.where(np.abs(t_fixed) <= (Tb_s / 4.0), 1.0, 0.0)
+    p_rect_Tb = np.where(np.abs(t_fixed) <= (Tb_s / 2.0), 1.0, 0.0)
+    p_half_sine = np.where(
+        np.abs(t_fixed) <= (Tb_s / 2.0), np.cos(np.pi * t_fixed / Tb_s), 0.0
+    )
+
+    fig, axes = plt.subplots(3, 1, figsize=(8, 6), sharex=True)
+    axes[0].plot(t_fixed, p_rect_Tb_2, linewidth=1.6)
+    axes[0].set_title("Pulso retangular: $\\Pi(2t/T_b)$ (t fixo = 1.2s)")
+
+    axes[1].plot(t_fixed, p_rect_Tb, linewidth=1.6)
+    axes[1].set_title("Pulso retangular: $\\Pi(t/T_b)$")
+
+    axes[2].plot(t_fixed, p_half_sine, linewidth=1.6)
+    axes[2].set_title("Meia-senóide: $\\sin(\\pi t/T_b)$")
+
+    axes[2].set_xlabel("Tempo (s)")
     plt.tight_layout()
     plt.show()
     return
