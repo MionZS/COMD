@@ -5,12 +5,22 @@ app = marimo.App(width="medium")
 
 
 @app.cell
+def _():
+    import marimo as mo
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from scipy.signal import welch
+
+    return mo, np, plt, welch
+
+
+@app.cell
 def _(mo):
     mo.md(r"""
-    # Trabalho Computacional 1 — Comunicação Digital
+    # Trabalho Computacional 1 -- Comunicacao Digital
 
     Este notebook implementa:
-    ##Códigos de linha:
+    ## Codigos de linha:
     - **Polar**,
     - **On-off**,
     - **Bipolar**;
@@ -19,11 +29,11 @@ def _(mo):
     ## Pulsos:
     - \( \Pi(2t/T_b) \) - Meio-pulso retangular,
     - \( \Pi(t/T_b) \) - Pulso retangular,
-    - \( \sin(\pi t/T_b) \) - Meia-senóide;
+    - \( \sin(\pi t/T_b) \) - Meia-senoide;
 
     ---
-    ## Análises
-    - Gráficos no domínio do tempo em \( [0, 10T_b) \);
+    ## Analises
+    - Graficos no dominio do tempo em \( [0, 10T_b) \);
     - PSDs por **Welch** em dB/Hz.
     """)
     return
@@ -32,84 +42,57 @@ def _(mo):
 @app.cell
 def _(mo):
     _msg = mo.md(r"""
-    #Definição de constantes:
-    - **Tb = 1**: Intervalo de pulso, intervalo de bit para sistemas binários | segundo
-    - **fs = 10**: Frequência de amostragem | hertz
-    - **Nb = 10^5**: Número de bits a serem gerados/analisados | adimensional
-    - **N = Tb*fs = 10**: Amostras na duração do pulso | adimensional
+    # Definicao de constantes:
+    - **Tb = 1**: Intervalo de bit | segundo
+    - **fs = 10**: Frequencia de amostragem | hertz
+    - **Nb = 10^5**: Numero de bits analisados
+    - **N = Tb*fs = 10**: Amostras por bit
     """)
-    Tb = 1                 # Intervalo de pulso, intervalo de bit para sistemas binários | segundo
-    fs = 10                # Frequência de amostragem | hertz
-    Nb = 10**5             # Número de bits a serem gerados/analisados | adimensional
-    N = int(round(Tb*fs))  # Amostras na duração do pulso | adimensional
+    Tb = 1.0
+    fs = 10.0
+    T = 1.0 / fs
+    Nb = 10**5
+    N = int(round(Tb * fs))
     _msg
-    return N, Nb, Tb
+    return N, Nb, T, Tb, fs
 
 
 @app.cell
 def _(Nb, mo, np):
     _msg = mo.md("""
-    ## Definição da aleatoriedade:
-    Vamos usar um número fixo garantindo consistência na visualização da codificação de linha
-    - **seed = 42**: Número usado como semente de aleatoriedade para resultados reproduzíveis
-    - **rng = np.random.default_rng(seed)**: Raíz geradora
-    - **bits = rng.integers(0, 2, size=Nb)**: Bits gerados aleatoriamente
+    ## Definicao da aleatoriedade:
+    - **seed = 42**: Semente para resultados reproduziveis
+    - **rng = np.random.default_rng(seed)**: Gerador
+    - **bits = rng.integers(0, 2, size=Nb)**: Bits aleatorios
     """)
-    seed = 42                           # Número usado como semente de aleatoriedade para resultados reproduzíveis
-    rng = np.random.default_rng(seed)   # Raíz geradora 
-    bits = rng.integers(0, 2, size=Nb)  # Geração dos bits
+    seed = 42
+    rng = np.random.default_rng(seed)
+    bits = rng.integers(0, 2, size=Nb)
     _msg
-    return (bits,)
+    return bits
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Definição de Funções
-    ### Função de codificação de linha:
-    *encode_bits(bits, codi)*: Retorna uma lista de mesmo tamanho do que a lista de bits com a codificação esperada, dentre as 3 codificações relevantes.
-
-    codi = {polar, on_off, bipolar}
-
-    ---
-
-    ### Função de geração de pulso:
-    *make_pulse(pulse_name)*: Retorna um dos 3 pulsos escolhidos.
-
-    pulse_name = {rect_Tb, rect_Tb_half, sine_half}
-
-    ---
-
-    ### Função de geração de trem de pulsos:
-    *pulse_train(impulses, pulse)*: Recebe os bits gerados e gera uma sequência de pulsos com essa ordem.
-
-    pulse = {make_pulse(rect_Tb), make_pulse(rect_Tb_half), make_pulse(sine_half)}
-
-    ---
-
-    ### Função para calcular PSD com Welch
-    *welch_psd_db(signal)*: Retorna a estimação da PSD  do sinal por Welch, ao passar-se o sinal.
-
-    signal pode ser qualquer combinação de codificação de linha com pulso dentre as 9 possíveis.
-
-    ---
-
-    ### Função para estimar o primeiro valor nulo na frequência
-    *estimate_null(pulse)*: Dado um pulso, estima-se o primeiro nulo.
-
-    ---
+    # Definicao de Funcoes
+    - *encode_bits(bits, codi)*
+    - *make_pulse(pulse_name)*
+    - *pulse_train(symbols, pulse)*
+    - *welch_psd_db(signal)*
+    - *estimate_first_null_from_pulse(pulse)*
     """)
     return
 
 
 @app.cell
-def _(N, T, Tb, Tb_s, fs_hz, largura_pulso, np, t, welch):
+def _(N, T, Tb, fs, np, welch):
     def encode_bits(bits, codi):
         if codi == "polar":
             return np.where(bits == 1, 1.0, -1.0)
         if codi == "on_off":
             return bits.astype(float)
-        if codi =="bipolar":
+        if codi == "bipolar":
             symbols = np.zeros(len(bits), dtype=float)
             current = 1.0
             for i, b in enumerate(bits):
@@ -117,18 +100,26 @@ def _(N, T, Tb, Tb_s, fs_hz, largura_pulso, np, t, welch):
                     symbols[i] = current
                     current *= -1.0
             return symbols
+        raise ValueError(f"Codigo desconhecido: {codi}")
 
     def make_pulse(pulse_name):
-        _t = (np.arange(N) - (N - 1) / 2.0) / fs_hz
+        _t = (np.arange(N) - (N - 1) / 2.0) / fs
         if pulse_name == "rect_Tb":
-            np.where(np.abs(t) <= largura_pulso, Tb/2, 0)
+            p = np.where(np.abs(_t) <= (Tb / 2.0), 1.0, 0.0)
         elif pulse_name == "rect_Tb_half":
-            np.where(np.abs(t) <= largura_pulso, (Tb/2)/2, 0)
+            p = np.zeros(N, dtype=float)
+            _half_len = max(1, N // 2)
+            _start = (N - _half_len) // 2
+            _end = _start + _half_len
+            p[_start:_end] = 1.0
         elif pulse_name == "sine_half":
             p = np.zeros(N, dtype=float)
-            _mask = np.abs(_t) <= (Tb_s / 2.0)
-            p[_mask] = np.cos(np.pi * _t[_mask] / Tb_s)
-    
+            _mask = np.abs(_t) <= (Tb / 2.0)
+            p[_mask] = np.cos(np.pi * _t[_mask] / Tb)
+        else:
+            raise ValueError(f"Pulso desconhecido: {pulse_name}")
+        return p
+
     def pulse_train(symbols, pulse):
         x = np.zeros(len(symbols) * N)
         x[::N] = symbols
@@ -140,7 +131,7 @@ def _(N, T, Tb, Tb_s, fs_hz, largura_pulso, np, t, welch):
         nperseg = min(4096, len(signal))
         f, Syy = welch(
             signal,
-            fs=fs_hz,
+            fs=fs,
             nperseg=nperseg,
             return_onesided=False,
             detrend=False,
@@ -154,7 +145,7 @@ def _(N, T, Tb, Tb_s, fs_hz, largura_pulso, np, t, welch):
     def estimate_first_null_from_pulse(pulse):
         nfft = 2**16
         P = np.fft.fft(pulse, n=nfft)
-        f = np.fft.fftfreq(nfft, d=1 / fs_hz)
+        f = np.fft.fftfreq(nfft, d=1 / fs)
         mask = f >= 0
         f_pos = f[mask]
         P_pos = np.abs(P[mask])
@@ -166,43 +157,39 @@ def _(N, T, Tb, Tb_s, fs_hz, largura_pulso, np, t, welch):
         encode_bits,
         estimate_first_null_from_pulse,
         make_pulse,
+        pulse_train,
         welch_psd_db,
     )
 
 
 @app.cell
-def _(Tb):
-    pulse_widths = {
-        "rect_Tb_half": Tb / 2,
-        "rect_Tb": Tb,
-        "sine_half": Tb,
+def _(
+    bits,
+    encode_bits,
+    estimate_first_null_from_pulse,
+    make_pulse,
+    pulse_train,
+    welch_psd_db,
+):
+    schemes = {
+        "polar": "Polar",
+        "on_off": "On-Off",
+        "bipolar": "Bipolar (AMI)",
     }
-    pulse_labels = {
+
+    pulses = {
         "rect_Tb_half": r"$\Pi(2t/T_b)$",
         "rect_Tb": r"$\Pi(t/T_b)$",
         "sine_half": r"$\sin(\pi t/T_b)$",
     }
-    return
 
-
-@app.cell
-def _(
-    bits,
-    build_waveform,
-    encode_bits,
-    estimate_first_null_from_pulse,
-    make_pulse,
-    pulses,
-    schemes,
-    welch_psd_db,
-):
     results = {}
     for _scheme in schemes:
         _symbols = encode_bits(bits, _scheme)
         results[_scheme] = {}
         for _pulse_name in pulses:
             _pulse = make_pulse(_pulse_name)
-            _, _signal, _time = build_waveform(_symbols, _pulse)
+            _, _signal, _time = pulse_train(_symbols, _pulse)
             _freq, _psd_db = welch_psd_db(_signal)
             results[_scheme][_pulse_name] = {
                 "signal": _signal,
@@ -212,23 +199,136 @@ def _(
                 "dc_mean": float(_signal.mean()),
                 "first_null_hz": estimate_first_null_from_pulse(_pulse),
             }
+    return pulses, results, schemes
+
+
+@app.cell
+def _(Tb, plt, pulses, results, schemes):
+    NUM_BITS_TO_SHOW = 10
+    _max_pulse_width = Tb
+    _time_margin = 0.08 * _max_pulse_width
+    _time_limit = NUM_BITS_TO_SHOW * Tb + _time_margin
+    _fig, _axes = plt.subplots(3, 3, figsize=(15, 9), sharex=True)
+
+    _scheme_keys = list(schemes.keys())
+    _pulse_keys = list(pulses.keys())
+
+    for _i, _scheme in enumerate(_scheme_keys):
+        for _j, _pulse_name in enumerate(_pulse_keys):
+            _ax = _axes[_i, _j]
+            _time = results[_scheme][_pulse_name]["time"]
+            _signal = results[_scheme][_pulse_name]["signal"]
+            _mask = (_time >= 0) & (_time < _time_limit)
+            _ax.plot(_time[_mask], _signal[_mask], linewidth=1.6)
+            _ax.grid(True, alpha=0.35)
+            if _i == 0:
+                _ax.set_title(pulses[_pulse_name])
+            _ax.set_ylabel(f"{schemes[_scheme]}\nAmplitude")
+            if _i == 2:
+                _ax.set_xlabel("Tempo [s]")
+
+    _fig.suptitle("Codigos de linha no dominio do tempo (0 a 10Tb)")
+    plt.tight_layout()
+    plt.show()
     return
 
 
 @app.cell
-def _():
-    import marimo as mo
+def _(Tb, np, plt):
+    _pulse_widths = {
+        "rect_Tb_half": Tb / 2,
+        "rect_Tb": Tb,
+        "sine_half": Tb,
+    }
+    _pulse_labels = {
+        "rect_Tb_half": r"$\Pi(2t/T_b)$",
+        "rect_Tb": r"$\Pi(t/T_b)$",
+        "sine_half": r"$\sin(\pi t/T_b)$",
+    }
 
-    return (mo,)
+    _max_width = max(_pulse_widths.values())
+    _x_margin = 0.08 * _max_width
+    _x_min = -_max_width / 2.0 - _x_margin
+    _x_max = _max_width / 2.0 + _x_margin
+
+    _t = np.linspace(_x_min, _x_max, 1000)
+    _pulse_shapes = {
+        "rect_Tb_half": (np.abs(_t) <= (_pulse_widths["rect_Tb_half"] / 2.0)).astype(float),
+        "rect_Tb": (np.abs(_t) <= (_pulse_widths["rect_Tb"] / 2.0)).astype(float),
+        "sine_half": np.where(
+            np.abs(_t) <= (_pulse_widths["sine_half"] / 2.0),
+            np.cos(np.pi * _t / Tb),
+            0.0,
+        ),
+    }
+
+    _fig, _ax = plt.subplots(figsize=(7.2, 3.4))
+    for _pulse_key in ["rect_Tb_half", "rect_Tb", "sine_half"]:
+        _ax.plot(
+            _t,
+            _pulse_shapes[_pulse_key],
+            linewidth=1.6,
+            label=f"p(t)={_pulse_labels[_pulse_key]}",
+        )
+
+    _ax.set_xlim(_x_min, _x_max)
+    _ax.set_ylim(-0.02, 1.05)
+    _ax.set_xlabel("Tempo (s)")
+    _ax.set_ylabel("Amplitude")
+    _ax.grid(True, alpha=0.3)
+    _ax.legend(loc="lower right")
+    plt.tight_layout()
+    plt.show()
+    return
 
 
 @app.cell
-def _():
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import scipy as sp
+def _(fs, plt, pulses, results, schemes):
+    _fig, _axes = plt.subplots(3, 3, figsize=(15, 9), sharex=True, sharey=True)
 
-    return (np,)
+    _scheme_keys = list(schemes.keys())
+    _pulse_keys = list(pulses.keys())
+
+    for _i, _scheme in enumerate(_scheme_keys):
+        for _j, _pulse_name in enumerate(_pulse_keys):
+            _ax = _axes[_i, _j]
+            _freq = results[_scheme][_pulse_name]["freq"]
+            _psd_db = results[_scheme][_pulse_name]["psd_db"]
+            _ax.plot(_freq, _psd_db, linewidth=1.3)
+            _ax.grid(True, alpha=0.35)
+            _ax.set_xlim(-fs / 2, fs / 2)
+            _ax.set_ylim(-90, 10)
+
+            if _i == 0:
+                _ax.set_title(pulses[_pulse_name])
+            if _j == 0:
+                _ax.set_ylabel(f"{schemes[_scheme]}\nPSD [dB/Hz]")
+            if _i == 2:
+                _ax.set_xlabel("Frequencia [Hz]")
+
+    _fig.suptitle("Densidade espectral de potencia via Welch")
+    plt.tight_layout()
+    plt.show()
+    return
+
+
+@app.cell
+def _(mo, pulses, results, schemes):
+    rows = []
+    for scheme_key, scheme_label in schemes.items():
+        for pulse_key, pulse_label in pulses.items():
+            data = results[scheme_key][pulse_key]
+            rows.append(
+                {
+                    "Sinalizacao": scheme_label,
+                    "Pulso": pulse_label,
+                    "Media (indicador DC)": round(data["dc_mean"], 6),
+                    "1o nulo estimado [Hz]": round(data["first_null_hz"], 6),
+                }
+            )
+
+    mo.ui.table(rows)
+    return
 
 
 if __name__ == "__main__":
