@@ -3,7 +3,7 @@ import marimo
 __generated_with = "0.23.0"
 app = marimo.App(
     width="wide",
-    layout_file="layouts/trabalho1_comdigital_marimo.slides.json",
+    layout_file="layouts/trabalho1_comdigital_marimo_copia.slides.json",
 )
 
 
@@ -66,7 +66,7 @@ def _(Nb, Tb, fs, np, seed):
 
 
 @app.cell
-def _(N, T, fs_hz, np, welch):
+def _(N, T, Tb_s, fs_hz, np, welch):
     def encode_bits(bits, scheme):
         if scheme == "polar":
             return np.where(bits == 1, 1.0, -1.0)
@@ -83,20 +83,15 @@ def _(N, T, fs_hz, np, welch):
         raise ValueError(f"Esquema desconhecido: {scheme}")
 
     def make_pulse(pulse_name):
-        # define pulses on one symbol duration and center them
-        _t = np.arange(N) / fs_hz
-        # create a pulse array centered in the N samples
+        _t = (np.arange(N) - (N - 1) / 2.0) / fs_hz
         if pulse_name == "rect_Tb_2":
-            p = np.zeros(N)
-            w = max(1, N // 2)
-            start = (N - w) // 2
-            p[start : start + w] = 1.0
+            p = (np.abs(_t) <= (Tb_s / 4.0)).astype(float)
         elif pulse_name == "rect_Tb":
-            p = np.ones(N)
+            p = (np.abs(_t) <= (Tb_s / 2.0)).astype(float)
         elif pulse_name == "half_sine":
-            # half-sine across the symbol interval (0..Tb) but centered in the sample window
-            # use a half-sine shape starting and ending near zero across N samples
-            p = np.sin(np.pi * np.arange(N) / max(1, N))
+            p = np.zeros(N, dtype=float)
+            _mask = np.abs(_t) <= (Tb_s / 2.0)
+            p[_mask] = np.cos(np.pi * _t[_mask] / Tb_s)
         else:
             raise ValueError(f"Pulso desconhecido: {pulse_name}")
         return p
@@ -232,15 +227,16 @@ def _(Tb_s, np, plt):
 
     _max_width = max(_pulse_widths.values())
     _x_margin = 0.08 * _max_width
-    _x_end = _max_width + _x_margin
+    _x_min = -_max_width / 2.0 - _x_margin
+    _x_max = _max_width / 2.0 + _x_margin
 
-    _t = np.linspace(0.0, _x_end, 1000)
+    _t = np.linspace(_x_min, _x_max, 1000)
     _pulse_shapes = {
-        "rect_Tb_2": ((_t >= 0.0) & (_t <= _pulse_widths["rect_Tb_2"])).astype(float),
-        "rect_Tb": ((_t >= 0.0) & (_t <= _pulse_widths["rect_Tb"])).astype(float),
+        "rect_Tb_2": (np.abs(_t) <= (_pulse_widths["rect_Tb_2"] / 2.0)).astype(float),
+        "rect_Tb": (np.abs(_t) <= (_pulse_widths["rect_Tb"] / 2.0)).astype(float),
         "half_sine": np.where(
-            (_t >= 0.0) & (_t <= _pulse_widths["half_sine"]),
-            np.sin(np.pi * _t / Tb_s),
+            np.abs(_t) <= (_pulse_widths["half_sine"] / 2.0),
+            np.cos(np.pi * _t / Tb_s),
             0.0,
         ),
     }
@@ -254,7 +250,7 @@ def _(Tb_s, np, plt):
             label=f"p(t)={_pulse_labels[_pulse_key]}",
         )
 
-    _ax.set_xlim(0.0, _x_end)
+    _ax.set_xlim(_x_min, _x_max)
     _ax.set_ylim(-0.02, 1.05)
     _ax.set_xlabel("Time (s)")
     _ax.set_ylabel("Amplitude")
