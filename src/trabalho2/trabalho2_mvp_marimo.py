@@ -27,35 +27,46 @@ def title_c02(mo_c01):
 
 
 @app.cell
-def ui_sliders_c03(mo_c01):
-    """
-    Controles interativos para a simulação.
-    RF01: número de bits controla tamanho da sequência pseudoaleatória.
-    RF07: alpha controla fator de roll-off do RRC.
-    """
-    mo_c01.md("## ⚙️ Controles da Simulação")
+def controls_md_c02b(mo_c01):
+    mo_c01.md("""
+    ## ⚙️ Controles da Simulação
 
-    num_bits_slider_c03 = mo_c01.ui.slider(
-        value=50000, 
-        start=10000, 
-        stop=500000, 
-        step=10000, 
-        label="📊 Número de bits (RF01)"
+    Ajuste os controles abaixo para configurar a simulação:
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def ui_sliders_c03(mo_c01):
+    """Controles interativos para a simulação (RF01, RF07)."""
+    num_bits_slider_c03 = mo_c01.ui.number(
+        value=50000,
+        start=10000,
+        stop=500000,
+        step=10000,
+        label="📊 Número de bits (RF01)",
     )
 
-    seed_slider_c03 = mo_c01.ui.slider(
-        value=42, 
-        start=0, 
-        stop=1000, 
-        step=1, 
-        label="🌱 Seed do RNG"
+    seed_slider_c03 = mo_c01.ui.number(
+        value=42,
+        start=0,
+        stop=1000,
+        step=1,
+        label="🌱 Seed do RNG",
     )
 
     alpha_input_c03 = mo_c01.ui.text(
-        value="0.15", 
-        label="📈 RRC alpha (RF07) [0.0-1.0]"
+        value="0.15",
+        label="📈 RRC alpha (RF07) [0.0-1.0]",
     )
-    return alpha_input_c03, num_bits_slider_c03, seed_slider_c03
+
+    mo_c01.vstack([
+        num_bits_slider_c03,
+        seed_slider_c03,
+        alpha_input_c03,
+    ])
+
+    return num_bits_slider_c03, seed_slider_c03, alpha_input_c03
 
 
 @app.cell
@@ -98,8 +109,7 @@ def gray_coding_c06():
             n_c06 ^= g_c06
             g_c06 >>= 1
         return n_c06
-
-    return
+    return int_to_gray_c06, gray_to_int_c06
 
 
 @app.cell
@@ -120,8 +130,7 @@ def rf03_rf04_constellation_c07(np_c01):
     def psk_constellation_c07(M_c07):
         const_c07 = np_c01.exp(1j * 2 * np_c01.pi * np_c01.arange(M_c07) / M_c07)
         return const_c07 / np_c01.sqrt(np_c01.mean(np_c01.abs(const_c07) ** 2))
-
-    return
+    return qam_constellation_c07, psk_constellation_c07
 
 
 @app.cell
@@ -169,8 +178,14 @@ def rf02_symbol_mapping_c08(np_c01):
         ints_c08 = np_c01.array([gray_to_int_c08(int(x_c08)) for x_c08 in idx_c08])
         bits_c08 = ((ints_c08[:, None] & (1 << np_c01.arange(b_c08 - 1, -1, -1))) > 0).astype(int)
         return bits_c08.reshape(-1)
-
-    return
+    return (
+        int_to_gray_c08,
+        gray_to_int_c08,
+        qam_constellation_c08,
+        psk_constellation_c08,
+        bits_to_symbols_c08,
+        symbols_to_bits_c08,
+    )
 
 
 @app.cell
@@ -212,8 +227,7 @@ def rf07_pulse_shaping_c09(alpha_input_c03, np_c01, sps_c04):
                     den_c09 = np_c01.pi * ti_c09 * (1 - (4 * alpha_c09 * ti_c09) ** 2)
                     p_c09[i_c09] = num_c09 / den_c09
         return p_c09 / np_c01.sqrt(np_c01.sum(p_c09**2))
-
-    return
+    return pulse_coeffs_c09
 
 
 @app.cell
