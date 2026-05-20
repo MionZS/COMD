@@ -55,7 +55,6 @@ def ui_sliders_c03(mo_c01):
         value="0.15", 
         label="📈 RRC alpha (RF07) [0.0-1.0]"
     )
-
     return alpha_input_c03, num_bits_slider_c03, seed_slider_c03
 
 
@@ -78,7 +77,7 @@ def rf01_rng_init_c05(np_c01, seed_slider_c03):
     RF01: Gerador de números aleatórios para sequência pseudoaleatória.
     """
     rng_c05 = np_c01.random.default_rng(int(seed_slider_c03.value))
-    return rng_c05
+    return (rng_c05,)
 
 
 @app.cell
@@ -100,7 +99,7 @@ def gray_coding_c06():
             g_c06 >>= 1
         return n_c06
 
-    return int_to_gray_c06, gray_to_int_c06
+    return
 
 
 @app.cell
@@ -122,13 +121,11 @@ def rf03_rf04_constellation_c07(np_c01):
         const_c07 = np_c01.exp(1j * 2 * np_c01.pi * np_c01.arange(M_c07) / M_c07)
         return const_c07 / np_c01.sqrt(np_c01.mean(np_c01.abs(const_c07) ** 2))
 
-    return qam_constellation_c07, psk_constellation_c07
+    return
 
 
 @app.cell
-def rf02_symbol_mapping_c08(
-    np_c01,
-):
+def rf02_symbol_mapping_c08(np_c01):
     """
     **RF02: Agrupamento de bits em blocos de tamanho b = log₂(M)**
 
@@ -173,14 +170,7 @@ def rf02_symbol_mapping_c08(
         bits_c08 = ((ints_c08[:, None] & (1 << np_c01.arange(b_c08 - 1, -1, -1))) > 0).astype(int)
         return bits_c08.reshape(-1)
 
-    return (
-        int_to_gray_c08,
-        gray_to_int_c08,
-        qam_constellation_c08,
-        psk_constellation_c08,
-        bits_to_symbols_c08,
-        symbols_to_bits_c08,
-    )
+    return
 
 
 @app.cell
@@ -223,7 +213,7 @@ def rf07_pulse_shaping_c09(alpha_input_c03, np_c01, sps_c04):
                     p_c09[i_c09] = num_c09 / den_c09
         return p_c09 / np_c01.sqrt(np_c01.sum(p_c09**2))
 
-    return pulse_coeffs_c09
+    return
 
 
 @app.cell
@@ -246,7 +236,7 @@ def rf15_theoretical_ber_c10(erfc_c01, np_c01):
         q_c10 = 0.5 * erfc_c01(np_c01.sqrt(2 * b_c10 * ebn0_lin_c10) * np_c01.sin(np_c01.pi / M_c10) / np_c01.sqrt(2))
         return (2 / b_c10) * q_c10
 
-    return theoretical_ber_c10
+    return (theoretical_ber_c10,)
 
 
 @app.cell
@@ -371,7 +361,7 @@ def rf08_rf09_rf10_rf11_rf12_link_sim_c11(
         ber_c11 = np_c01.mean(bits_tx_c11 != bits_rx_c11)
         return ber_c11, symbols_tx_c11, symbols_rx_c11, const_c11
 
-    return simulate_link_c11
+    return (simulate_link_c11,)
 
 
 @app.cell
