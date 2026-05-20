@@ -54,19 +54,11 @@ def ui_sliders_c03(mo_c01):
         step=1,
         label="🌱 Seed do RNG",
     )
-
-    alpha_input_c03 = mo_c01.ui.text(
-        value="0.15",
-        label="📈 RRC alpha (RF07) [0.0-1.0]",
-    )
-
     mo_c01.vstack([
         num_bits_slider_c03,
         seed_slider_c03,
-        alpha_input_c03,
     ])
-
-    return num_bits_slider_c03, seed_slider_c03, alpha_input_c03
+    return num_bits_slider_c03, seed_slider_c03
 
 
 @app.cell
@@ -76,10 +68,28 @@ def params_fixed_c04():
     """
     fc_c04 = 10.0          # RF08: Frequência portadora
     sps_c04 = 4            # RF12: Amostras por símbolo
-    ebn0_db_c04 = [0, 4, 8, 12, 16, 20, 24]  # RF12: Pontos de simulação
-    kind_cases_c04 = [("psk", 4), ("qam", 16)]  # RF03, RF04
+    ebn0_db_c04 = [0, 4, 8, 12, 16, 20, 24]  # RF12: Pontos de simulação (0..24, passo 4)
+    # PSK: b = 1..4 bits → M = 2,4,8,16
+    # QAM: b = 2,4,6 bits → M = 4,16,64
+    kind_cases_c04 = [
+        ("psk", 2),
+        ("psk", 4),
+        ("psk", 8),
+        ("psk", 16),
+        ("qam", 4),
+        ("qam", 16),
+        ("qam", 64),
+    ]  # RF03, RF04
     pulse_cases_c04 = ["nrz", "rrc"]  # RF07
-    return ebn0_db_c04, fc_c04, kind_cases_c04, pulse_cases_c04, sps_c04
+    alpha_c04 = 0.15  # fixo
+    return (
+        alpha_c04,
+        ebn0_db_c04,
+        fc_c04,
+        kind_cases_c04,
+        pulse_cases_c04,
+        sps_c04,
+    )
 
 
 @app.cell
@@ -109,7 +119,8 @@ def gray_coding_c06():
             n_c06 ^= g_c06
             g_c06 >>= 1
         return n_c06
-    return int_to_gray_c06, gray_to_int_c06
+
+    return
 
 
 @app.cell
@@ -130,7 +141,8 @@ def rf03_rf04_constellation_c07(np_c01):
     def psk_constellation_c07(M_c07):
         const_c07 = np_c01.exp(1j * 2 * np_c01.pi * np_c01.arange(M_c07) / M_c07)
         return const_c07 / np_c01.sqrt(np_c01.mean(np_c01.abs(const_c07) ** 2))
-    return qam_constellation_c07, psk_constellation_c07
+
+    return
 
 
 @app.cell
@@ -178,18 +190,12 @@ def rf02_symbol_mapping_c08(np_c01):
         ints_c08 = np_c01.array([gray_to_int_c08(int(x_c08)) for x_c08 in idx_c08])
         bits_c08 = ((ints_c08[:, None] & (1 << np_c01.arange(b_c08 - 1, -1, -1))) > 0).astype(int)
         return bits_c08.reshape(-1)
-    return (
-        int_to_gray_c08,
-        gray_to_int_c08,
-        qam_constellation_c08,
-        psk_constellation_c08,
-        bits_to_symbols_c08,
-        symbols_to_bits_c08,
-    )
+
+    return
 
 
 @app.cell
-def rf07_pulse_shaping_c09(alpha_input_c03, np_c01, sps_c04):
+def rf07_pulse_shaping_c09(alpha_c04, np_c01, sps_c04):
     """
     **RF07: Formatação de pulso NRZ e RRC**
 
@@ -199,7 +205,7 @@ def rf07_pulse_shaping_c09(alpha_input_c03, np_c01, sps_c04):
     Ambos normalizados em energia (l₂ norm = 1).
     Alpha é controlado pelo input box na célula ui_sliders_c03.
     """
-    alpha_c09 = float(alpha_input_c03.value)
+    alpha_c09 = float(alpha_c04)
 
     def pulse_coeffs_c09(name_c09):
         if name_c09 == "nrz":
@@ -227,7 +233,8 @@ def rf07_pulse_shaping_c09(alpha_input_c03, np_c01, sps_c04):
                     den_c09 = np_c01.pi * ti_c09 * (1 - (4 * alpha_c09 * ti_c09) ** 2)
                     p_c09[i_c09] = num_c09 / den_c09
         return p_c09 / np_c01.sqrt(np_c01.sum(p_c09**2))
-    return pulse_coeffs_c09
+
+    return
 
 
 @app.cell
@@ -255,7 +262,7 @@ def rf15_theoretical_ber_c10(erfc_c01, np_c01):
 
 @app.cell
 def rf08_rf09_rf10_rf11_rf12_link_sim_c11(
-    alpha_input_c03,
+    alpha_c04,
     fc_c04,
     np_c01,
     rng_c05,
@@ -311,7 +318,7 @@ def rf08_rf09_rf10_rf11_rf12_link_sim_c11(
         return bits_c11.reshape(-1)
 
     # Inlined pulse shaping
-    alpha_c11 = float(alpha_input_c03.value)
+    alpha_c11 = float(alpha_c04)
 
     def pulse_coeffs_c11(name_c11):
         if name_c11 == "nrz":
