@@ -216,8 +216,8 @@ Com α=0.0:  Ambos próximos (menos diferença)
 
 ## 📖 Documentação Técnica
 
-Para entender melhor como cada parâmetro afeta a simulação:
-- Ver: `docs/estrutura_cells_marimo_v2.md`
+- Para entender melhor como cada parâmetro afeta a simulação:
+- Ver: `estrutura_cells_marimo_v2.md`
 - Seção: "Mapa de Células por Requisito"
 
 ---

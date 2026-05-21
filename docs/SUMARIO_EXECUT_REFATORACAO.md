@@ -207,7 +207,7 @@ Dúvidas sobre os controles?
 → Ver: `GUIA_CONTROLES_INTERATIVOS.md`
 
 Entender a estrutura?
-→ Ver: `docs/estrutura_cells_marimo_v2.md`
+→ Ver: `estrutura_cells_marimo_v2.md`
 
 Resumo técnico?
 → Ver: `CHANGELOG_v2_refactored.md`
