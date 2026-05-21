@@ -39,12 +39,12 @@ def controls_md_c02b(mo_c01):
 @app.cell(hide_code=True)
 def ui_sliders_c03(mo_c01):
     """Controles interativos para a simulação (RF01, RF07)."""
-    num_bits_slider_c03 = mo_c01.ui.number(
-        value=50000,
-        start=10000,
-        stop=500000,
-        step=10000,
-        label="📊 Número de bits (RF01)",
+    num_bits_target_slider_c03 = mo_c01.ui.number(
+        value=2_000_000,
+        start=100000,
+        stop=10000000,
+        step=100000,
+        label="📊 Número de bits alvo (RF01)",
     )
 
     seed_slider_c03 = mo_c01.ui.number(
@@ -55,19 +55,19 @@ def ui_sliders_c03(mo_c01):
         label="🌱 Seed do RNG",
     )
     mo_c01.vstack([
-        num_bits_slider_c03,
+        num_bits_target_slider_c03,
         seed_slider_c03,
     ])
-    return num_bits_slider_c03, seed_slider_c03
+    return num_bits_target_slider_c03, seed_slider_c03
 
 
 @app.cell
 def params_fixed_c04():
     """
-    Parâmetros fixos conforme PRD.
+    Parâmetros fixos conforme Proposta TC2.
     """
     fc_c04 = 10.0          # RF08: Frequência portadora
-    sps_c04 = 4            # RF12: Amostras por símbolo
+    sps_c04 = 16           # RF12: Amostras por símbolo (match Lab 2: Ns=16, fs=40)
     ebn0_db_c04 = [0, 4, 8, 12, 16, 20, 24]  # RF12: Pontos de simulação (0..24, passo 4)
     # PSK: b = 1..4 bits → M = 2,4,8,16
     # QAM: b = 2,4,6 bits → M = 4,16,64
@@ -81,7 +81,7 @@ def params_fixed_c04():
         ("qam", 64),
     ]  # RF03, RF04
     pulse_cases_c04 = ["nrz", "rrc"]  # RF07
-    alpha_c04 = 0.15  # fixo
+    alpha_c04 = 0.15  # fixo conforme Proposta 5.4
     return (
         alpha_c04,
         ebn0_db_c04,
@@ -120,7 +120,7 @@ def gray_coding_c06():
             g_c06 >>= 1
         return n_c06
 
-    return
+    return gray_to_int_c06, int_to_gray_c06
 
 
 @app.cell
@@ -142,52 +142,35 @@ def rf03_rf04_constellation_c07(np_c01):
         const_c07 = np_c01.exp(1j * 2 * np_c01.pi * np_c01.arange(M_c07) / M_c07)
         return const_c07 / np_c01.sqrt(np_c01.mean(np_c01.abs(const_c07) ** 2))
 
-    return
+    return psk_constellation_c07, qam_constellation_c07
 
 
 @app.cell
-def rf02_symbol_mapping_c08(np_c01):
+def rf02_symbol_mapping_c08(
+    gray_to_int_c06,
+    int_to_gray_c06,
+    np_c01,
+    psk_constellation_c07,
+    qam_constellation_c07,
+):
     """
     **RF02: Agrupamento de bits em blocos de tamanho b = log₂(M)**
 
     Mapeia bits → índices → Gray code → símbolos da constelação.
     Usa Gray mapping para alinhamento com fórmulas teóricas (Proposta 5.5).
     """
-    # Gray coding functions (inlined to avoid dependency issues)
-    def int_to_gray_c08(n_c08):
-        return n_c08 ^ (n_c08 >> 1)
-
-    def gray_to_int_c08(g_c08):
-        n_c08 = 0
-        while g_c08:
-            n_c08 ^= g_c08
-            g_c08 >>= 1
-        return n_c08
-
-    # Constellation functions (inlined to avoid dependency issues)
-    def qam_constellation_c08(M_c08):
-        m_c08 = int(np_c01.sqrt(M_c08))
-        levels_c08 = np_c01.arange(-(m_c08 - 1), m_c08, 2)
-        xv_c08, yv_c08 = np_c01.meshgrid(levels_c08, levels_c08[::-1])
-        const_c08 = xv_c08.flatten() + 1j * yv_c08.flatten()
-        return const_c08 / np_c01.sqrt(np_c01.mean(np_c01.abs(const_c08) ** 2))
-
-    def psk_constellation_c08(M_c08):
-        const_c08 = np_c01.exp(1j * 2 * np_c01.pi * np_c01.arange(M_c08) / M_c08)
-        return const_c08 / np_c01.sqrt(np_c01.mean(np_c01.abs(const_c08) ** 2))
-
     def bits_to_symbols_c08(bits_c08, kind_c08, M_c08):
         b_c08 = int(np_c01.log2(M_c08))
         blocks_c08 = bits_c08.reshape(-1, b_c08)
         ints_c08 = blocks_c08.dot(1 << np_c01.arange(b_c08 - 1, -1, -1))
-        ints_c08 = np_c01.array([int_to_gray_c08(int(x_c08)) for x_c08 in ints_c08])
-        const_c08 = qam_constellation_c08(M_c08) if kind_c08 == "qam" else psk_constellation_c08(M_c08)
+        ints_c08 = np_c01.array([int_to_gray_c06(int(x_c08)) for x_c08 in ints_c08])
+        const_c08 = qam_constellation_c07(M_c08) if kind_c08 == "qam" else psk_constellation_c07(M_c08)
         return const_c08[ints_c08], const_c08, b_c08
 
     def symbols_to_bits_c08(rx_symbols_c08, const_c08, b_c08):
         d_c08 = np_c01.abs(rx_symbols_c08.reshape(-1, 1) - const_c08.reshape(1, -1)) ** 2
         idx_c08 = np_c01.argmin(d_c08, axis=1)
-        ints_c08 = np_c01.array([gray_to_int_c08(int(x_c08)) for x_c08 in idx_c08])
+        ints_c08 = np_c01.array([gray_to_int_c06(int(x_c08)) for x_c08 in idx_c08])
         bits_c08 = ((ints_c08[:, None] & (1 << np_c01.arange(b_c08 - 1, -1, -1))) > 0).astype(int)
         return bits_c08.reshape(-1)
 
@@ -211,7 +194,7 @@ def rf07_pulse_shaping_c09(alpha_c04, np_c01, sps_c04):
         if name_c09 == "nrz":
             p_c09 = np_c01.ones(sps_c04)
         else:
-            span_c09 = 4
+            span_c09 = 6  # match Lab 2 N.py: N_taps=6
             t_c09 = np_c01.arange(-span_c09 * sps_c04, span_c09 * sps_c04 + 1) / sps_c04
             p_c09 = np_c01.zeros_like(t_c09, dtype=float)
             for i_c09, ti_c09 in enumerate(t_c09):
@@ -264,7 +247,11 @@ def rf15_theoretical_ber_c10(erfc_c01, np_c01):
 def rf08_rf09_rf10_rf11_rf12_link_sim_c11(
     alpha_c04,
     fc_c04,
+    gray_to_int_c06,
+    int_to_gray_c06,
     np_c01,
+    psk_constellation_c07,
+    qam_constellation_c07,
     rng_c05,
     sps_c04,
 ):
@@ -278,42 +265,19 @@ def rf08_rf09_rf10_rf11_rf12_link_sim_c11(
     Cadeia completa: bits → símbolos → upsampling → formatação de pulso → 
     modulação → AWGN → demodulação → filtro casado → amostragem → decisão → bits
     """
-    # Inlined Gray coding
-    def int_to_gray_c11(n_c11):
-        return n_c11 ^ (n_c11 >> 1)
-
-    def gray_to_int_c11(g_c11):
-        n_c11 = 0
-        while g_c11:
-            n_c11 ^= g_c11
-            g_c11 >>= 1
-        return n_c11
-
-    # Inlined constellation functions
-    def qam_constellation_c11(M_c11):
-        m_c11 = int(np_c01.sqrt(M_c11))
-        levels_c11 = np_c01.arange(-(m_c11 - 1), m_c11, 2)
-        xv_c11, yv_c11 = np_c01.meshgrid(levels_c11, levels_c11[::-1])
-        const_c11 = xv_c11.flatten() + 1j * yv_c11.flatten()
-        return const_c11 / np_c01.sqrt(np_c01.mean(np_c01.abs(const_c11) ** 2))
-
-    def psk_constellation_c11(M_c11):
-        const_c11 = np_c01.exp(1j * 2 * np_c01.pi * np_c01.arange(M_c11) / M_c11)
-        return const_c11 / np_c01.sqrt(np_c01.mean(np_c01.abs(const_c11) ** 2))
-
-    # Inlined symbol mapping
+    # Use centralized Gray coding and constellation functions passed from other cells
     def bits_to_symbols_c11(bits_c11, kind_c11, M_c11):
         b_c11 = int(np_c01.log2(M_c11))
         blocks_c11 = bits_c11.reshape(-1, b_c11)
         ints_c11 = blocks_c11.dot(1 << np_c01.arange(b_c11 - 1, -1, -1))
-        ints_c11 = np_c01.array([int_to_gray_c11(int(x_c11)) for x_c11 in ints_c11])
-        const_c11 = qam_constellation_c11(M_c11) if kind_c11 == "qam" else psk_constellation_c11(M_c11)
+        ints_c11 = np_c01.array([int_to_gray_c06(int(x_c11)) for x_c11 in ints_c11])
+        const_c11 = qam_constellation_c07(M_c11) if kind_c11 == "qam" else psk_constellation_c07(M_c11)
         return const_c11[ints_c11], const_c11, b_c11
 
     def symbols_to_bits_c11(rx_symbols_c11, const_c11, b_c11):
         d_c11 = np_c01.abs(rx_symbols_c11.reshape(-1, 1) - const_c11.reshape(1, -1)) ** 2
         idx_c11 = np_c01.argmin(d_c11, axis=1)
-        ints_c11 = np_c01.array([gray_to_int_c11(int(x_c11)) for x_c11 in idx_c11])
+        ints_c11 = np_c01.array([gray_to_int_c06(int(x_c11)) for x_c11 in idx_c11])
         bits_c11 = ((ints_c11[:, None] & (1 << np_c01.arange(b_c11 - 1, -1, -1))) > 0).astype(int)
         return bits_c11.reshape(-1)
 
@@ -324,7 +288,7 @@ def rf08_rf09_rf10_rf11_rf12_link_sim_c11(
         if name_c11 == "nrz":
             p_c11 = np_c01.ones(sps_c04)
         else:
-            span_c11 = 4
+            span_c11 = 6  # match Lab 2 N.py: N_taps=6
             t_c11 = np_c01.arange(-span_c11 * sps_c04, span_c11 * sps_c04 + 1) / sps_c04
             p_c11 = np_c01.zeros_like(t_c11, dtype=float)
             for i_c11, ti_c11 in enumerate(t_c11):
@@ -349,9 +313,9 @@ def rf08_rf09_rf10_rf11_rf12_link_sim_c11(
 
     # Main link simulation function
 
-    def simulate_link_c11(kind_c11, M_c11, pulse_name_c11, ebn0_db_c11, num_bits_c11):
+    def simulate_link_c11(kind_c11, M_c11, pulse_name_c11, ebn0_db_c11, num_symbols_c11):
         b_c11 = int(np_c01.log2(M_c11))
-        bits_tx_c11 = rng_c05.integers(0, 2, size=(num_bits_c11 // b_c11) * b_c11)
+        bits_tx_c11 = rng_c05.integers(0, 2, size=num_symbols_c11 * b_c11)
         symbols_tx_c11, const_c11, b_c11 = bits_to_symbols_c11(bits_tx_c11, kind_c11, M_c11)
 
         pulse_c11 = pulse_coeffs_c11(pulse_name_c11)
@@ -390,7 +354,7 @@ def results_c12(
     ebn0_db_c04,
     kind_cases_c04,
     np_c01,
-    num_bits_slider_c03,
+    num_bits_target_slider_c03,
     pulse_cases_c04,
     simulate_link_c11,
     theoretical_ber_c10,
@@ -407,38 +371,51 @@ def results_c12(
 
     simulate_link_c12 = simulate_link_c11
     theoretical_ber_c12 = theoretical_ber_c10
-    num_bits_c12 = int(num_bits_slider_c03.value)
+    num_bits_target_c12 = int(num_bits_target_slider_c03.value)
+    import math as math_c12
 
     for pulse_name_c12 in pulse_cases_c04:
         results_c12[pulse_name_c12] = {}
         for kind_c12, M_c12 in kind_cases_c04:
             ber_curve_c12 = []
+            b_c12 = int(np_c01.log2(M_c12))
+            num_symbols_c12 = max(1, int(num_bits_target_c12 // b_c12))
+            num_bits_actual_c12 = num_symbols_c12 * b_c12
+            th_24_c12 = theoretical_ber_c12(kind_c12, M_c12, 24)
             for eb_c12 in ebn0_db_c04:
                 ber_c12, symbols_tx_c12, symbols_rx_c12, const_c12 = simulate_link_c12(
                     kind_c12,
                     M_c12,
                     pulse_name_c12,
                     eb_c12,
-                    num_bits_c12,
+                    num_symbols_c12,
                 )
-                ber_curve_c12.append(ber_c12)
-                if pulse_name_c12 == pulse_cases_c04[0] and kind_c12 == kind_cases_c04[0][0] and eb_c12 == ebn0_db_c04[-1]:
-                    example_tx_c12 = symbols_tx_c12
-                    example_rx_c12 = symbols_rx_c12
-                    example_const_c12 = const_c12
+                errors_c12 = int(round(ber_c12 * num_symbols_c12 * b_c12))
+                if errors_c12 == 0 and th_24_c12 > 0:
+                    required_bits_c12 = math_c12.ceil(3.0 / th_24_c12)
+                    ber_curve_c12.append(3.0 / required_bits_c12)
+                else:
+                    ber_curve_c12.append(ber_c12)
+                # store an example constellation at the highest Eb/N0 point
+                if eb_c12 == ebn0_db_c04[-1]:
+                    results_c12[pulse_name_c12].setdefault((kind_c12, M_c12), {})
+                    results_c12[pulse_name_c12][(kind_c12, M_c12)]["example_tx"] = symbols_tx_c12
+                    results_c12[pulse_name_c12][(kind_c12, M_c12)]["example_rx"] = symbols_rx_c12
+                    results_c12[pulse_name_c12][(kind_c12, M_c12)]["example_const"] = const_c12
             results_c12[pulse_name_c12][(kind_c12, M_c12)] = {
                 "ber": np_c01.array(ber_curve_c12),
                 "theory": np_c01.array([theoretical_ber_c12(kind_c12, M_c12, eb_c12) for eb_c12 in ebn0_db_c04]),
+                "num_symbols": num_symbols_c12,
+                "num_bits_actual": num_bits_actual_c12,
+                # example_* keys were set above for the highest Eb/N0
+                **results_c12[pulse_name_c12].get((kind_c12, M_c12), {}),
             }
-    return example_const_c12, example_rx_c12, example_tx_c12, results_c12
+    return (results_c12,)
 
 
 @app.cell
 def plots_final_c13(
     ebn0_db_c04,
-    example_const_c12,
-    example_rx_c12,
-    example_tx_c12,
     kind_cases_c04,
     plt_c01,
     pulse_cases_c04,
@@ -450,46 +427,118 @@ def plots_final_c13(
     Esquerda: BER simulada vs teórica em escala semilog para cada modulação/pulso.
     Direita: Constelação transmitida (TX), recebida (RX) e ideal.
     """
-    fig_c13, axes_c13 = plt_c01.subplots(1, 2, figsize=(12, 5))
+    # Create one figure per combination: pulse x (modulation, M)
+    for pulse_name_c13 in pulse_cases_c04:
+        for kind_c13, M_c13 in kind_cases_c04:
+            data = results_c12.get(pulse_name_c13, {}).get((kind_c13, M_c13), None)
+            if data is None:
+                continue
+            fig, axes = plt_c01.subplots(1, 2, figsize=(12, 5))
 
-    # Gráfico 1: BER
-    for kind_c13, M_c13 in kind_cases_c04:
-        for pulse_name_c13 in pulse_cases_c04:
-            label_c13 = f"{kind_c13.upper()} M={M_c13} / {pulse_name_c13.upper()}"
-            axes_c13[0].semilogy(
-                ebn0_db_c04, 
-                results_c12[pulse_name_c13][(kind_c13, M_c13)]["ber"], 
-                marker="o", 
-                label=label_c13,
-                linewidth=2
-            )
-            axes_c13[0].semilogy(
-                ebn0_db_c04, 
-                results_c12[pulse_name_c13][(kind_c13, M_c13)]["theory"], 
+            # BER plot for this case
+            # plot simulation and then theory (theory will use same color)
+            sim_line = axes[0].semilogy(
+                ebn0_db_c04,
+                data["ber"],
+                marker="o",
+                label=f"Simulada {kind_c13.upper()} M={M_c13}",
+                linewidth=2,
+            )[0]
+            axes[0].semilogy(
+                ebn0_db_c04,
+                data["theory"],
                 linestyle="--",
                 linewidth=1,
-                alpha=0.6
+                alpha=0.8,
+                color=sim_line.get_color(),
+                label="Teórica",
             )
+            axes[0].set_xlabel("Eb/N0 (dB)", fontsize=12)
+            axes[0].set_ylabel("BER", fontsize=12)
+            axes[0].grid(True, which="both", alpha=0.3)
+            axes[0].legend(fontsize=9)
+            axes[0].set_ylim([1e-5, 1])
+            axes[0].set_title(f"BER: {kind_c13.upper()} M={M_c13} / {pulse_name_c13.upper()}", fontsize=11, fontweight="bold")
 
-    axes_c13[0].set_xlabel("Eb/N0 (dB)", fontsize=12)
-    axes_c13[0].set_ylabel("BER", fontsize=12)
-    axes_c13[0].grid(True, which="both", alpha=0.3)
-    axes_c13[0].legend(fontsize=9, loc="best")
-    axes_c13[0].set_title("BER: Simulada (●) vs Teórica (--)", fontsize=11, fontweight="bold")
+            # Constellation example (at highest Eb/N0)
+            tx = data.get("example_tx")
+            rx = data.get("example_rx")
+            const = data.get("example_const")
+            if tx is None or rx is None or const is None:
+                axes[1].text(0.5, 0.5, "No example constellation available", ha="center", va="center")
+                axes[1].set_xticks([])
+                axes[1].set_yticks([])
+            else:
+                axes[1].scatter(tx.real, tx.imag, s=20, label="TX", alpha=0.6, color="blue")
+                axes[1].scatter(rx.real, rx.imag, s=20, label="RX", alpha=0.6, color="orange")
+                axes[1].scatter(const.real, const.imag, s=150, marker="x", label="Ideal", linewidth=2, color="red")
+                axes[1].set_xlabel("I (componente em fase)", fontsize=12)
+                axes[1].set_ylabel("Q (componente em quadratura)", fontsize=12)
+                axes[1].grid(True, alpha=0.3)
+                axes[1].legend(fontsize=9)
+                axes[1].set_title(f"Constelação (Eb/N0 = {ebn0_db_c04[-1]} dB)")
+                axes[1].axis("equal")
 
-    # Gráfico 2: Constelações
-    axes_c13[1].scatter(example_tx_c12.real, example_tx_c12.imag, s=20, label="TX (símbolo recebido)", alpha=0.6, color="blue")
-    axes_c13[1].scatter(example_rx_c12.real, example_rx_c12.imag, s=20, label="RX (após decisão)", alpha=0.6, color="orange")
-    axes_c13[1].scatter(example_const_c12.real, example_const_c12.imag, s=150, marker="x", label="Constelação ideal", linewidth=2, color="red")
-    axes_c13[1].set_xlabel("I (componente em fase)", fontsize=12)
-    axes_c13[1].set_ylabel("Q (componente em quadratura)", fontsize=12)
-    axes_c13[1].grid(True, alpha=0.3)
-    axes_c13[1].legend(fontsize=9)
-    axes_c13[1].set_title(f"Constelações (Eb/N0 = {ebn0_db_c04[-1]} dB)", fontsize=11, fontweight="bold")
-    axes_c13[1].axis("equal")
+            plt_c01.tight_layout()
+            plt_c01.show()
+    return
 
-    plt_c01.tight_layout()
-    plt_c01.show()
+
+@app.cell
+def plots_aggregate_by_pulse_c14(
+    ebn0_db_c04,
+    kind_cases_c04,
+    plt_c01,
+    pulse_cases_c04,
+    results_c12,
+):
+    """
+    Comparativos extras de BER: uma figura por pulso com todas as modulações.
+
+    Mantém os gráficos independentes já existentes e adiciona apenas os agregados por pulso.
+    """
+    from pathlib import Path as Path_c14
+
+    output_dir_c14 = Path_c14("output/lab2_artifacts")
+    output_dir_c14.mkdir(parents=True, exist_ok=True)
+    for png_c14 in output_dir_c14.glob("*.png"):
+        try:
+            png_c14.unlink()
+        except Exception:
+            pass
+
+    for pulse_name_c14 in pulse_cases_c04:
+        fig_c14, ax_c14 = plt_c01.subplots(1, 1, figsize=(9, 5))
+        for kind_c14, M_c14 in kind_cases_c04:
+            data_c14 = results_c12.get(pulse_name_c14, {}).get((kind_c14, M_c14), None)
+            if data_c14 is None:
+                continue
+            # plot sim then theory using same base color
+            sim_line_c14 = ax_c14.semilogy(
+                ebn0_db_c04,
+                data_c14["ber"],
+                marker="o",
+                linewidth=1.5,
+                label=f"SIM {kind_c14.upper()} M={M_c14}",
+            )[0]
+            ax_c14.semilogy(
+                ebn0_db_c04,
+                data_c14["theory"],
+                linestyle="--",
+                linewidth=1.2,
+                alpha=0.85,
+                color=sim_line_c14.get_color(),
+                label=f"TH {kind_c14.upper()} M={M_c14}",
+            )
+        ax_c14.set_xlabel("Eb/N0 (dB)")
+        ax_c14.set_ylabel("BER")
+        ax_c14.set_ylim([1e-5, 1])
+        ax_c14.set_title(f"BER comparativa - pulso {pulse_name_c14.upper()} (todas as modulações)")
+        ax_c14.grid(True, which="both", alpha=0.3)
+        ax_c14.legend(fontsize=8)
+        plt_c01.tight_layout()
+        fig_c14.savefig(output_dir_c14 / f"BER_all_modulations_pulse_{pulse_name_c14.upper()}.png", dpi=150)
+        plt_c01.show()
     return
 
 
