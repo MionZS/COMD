@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# Specific files
+Lab_2_N.py
+
 # Virtual environments
 .venv
 venv/
@@ -36,6 +39,7 @@ htmlcov/
 .idea/
 *.sublime-workspace
 *.sublime-project
+copilot_input/
 
 # Jupyter
 .ipynb_checkpoints

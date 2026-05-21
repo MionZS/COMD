@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import math
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,6 +22,7 @@ EBN0_LABEL = "Eb/N0 (dB)"
 BER_YLIM = (1e-5, 1)
 LEGEND_LOC = "upper right"
 DEFAULT_EBN0_DB = [0, 4, 8, 12, 16, 20, 24]
+MIN_EXPECTED_ERRORS = 20.0
 DEFAULT_KIND_CASES = [
     ("psk", 2),
     ("psk", 4),
@@ -35,6 +37,7 @@ DEFAULT_FC = 10.0
 DEFAULT_SPS = 16
 DEFAULT_ALPHA = 0.15
 DEFAULT_OUTPUT_DIR = Path("output/lab2_artifacts")
+REPORT_FILENAME = "BER_report_10x.md"
 
 
 def _prepare_output_dir(output_dir: Path | str) -> Path:
@@ -72,13 +75,20 @@ def _estimate_zero_error_ber(kind: str, m: int, ebn0_db: int, ber: float) -> flo
 
 def _simulate_curve(kind: str, m: int, pulse: str, ebn0_db: list[int], num_bits: int, rng, alpha: float, fc: float, sps: int):
     b = int(np.log2(m))
-    num_symbols = max(1, num_bits // b)
     sim_ber = []
+    num_bits_used = []
     for eb in ebn0_db:
+        expected_ber = theoretical_ber(kind, m, eb)
+        if expected_ber > 0.0:
+            point_num_bits = max(num_bits, math.ceil(MIN_EXPECTED_ERRORS / expected_ber))
+        else:
+            point_num_bits = num_bits
+        num_symbols = max(1, point_num_bits // b)
         ber, _, _, _ = simulate_link(kind, m, pulse, eb, num_symbols, rng, alpha, fc, sps)
         sim_ber.append(ber)
+        num_bits_used.append(num_symbols * b)
     theory = [theoretical_ber(kind, m, eb) for eb in ebn0_db]
-    return np.array(sim_ber), np.array(theory), num_symbols
+    return np.array(sim_ber), np.array(theory), np.array(num_bits_used)
 
 
 def _plot_case(output_dir: Path, pulse: str, kind: str, m: int, ebn0_db: list[int], sim_ber, theory) -> None:
@@ -88,7 +98,6 @@ def _plot_case(output_dir: Path, pulse: str, kind: str, m: int, ebn0_db: list[in
     ax.set_xlabel(EBN0_LABEL)
     ax.set_ylabel("BER")
     ax.set_ylim(BER_YLIM)
-    ax.set_title(f"BER - {kind.upper()} M={m} / Pulse={pulse.upper()}")
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(loc=LEGEND_LOC, fontsize=8)
     fig.tight_layout()
@@ -108,7 +117,6 @@ def _plot_all_modulations(output_dir: Path, pulse: str, ebn0_db: list[int], resu
     ax.set_xlabel(EBN0_LABEL)
     ax.set_ylabel("BER")
     ax.set_ylim(BER_YLIM)
-    ax.set_title(f"BER comparison - Pulse={pulse.upper()} (all modulations, 10x symbols)")
     ax.grid(True, which="both", alpha=0.3)
     handles, _ = ax.get_legend_handles_labels()
     if handles:
@@ -136,7 +144,6 @@ def _plot_average_by_kind(output_dir: Path, kind: str, ebn0_db: list[int], resul
     ax.set_xlabel(EBN0_LABEL)
     ax.set_ylabel("BER")
     ax.set_ylim(BER_YLIM)
-    ax.set_title(f"BER by pulse (averaged over Ms) - {kind.upper()} (10x symbols)")
     ax.grid(True, which="both", alpha=0.3)
     handles, _ = ax.get_legend_handles_labels()
     if handles:
@@ -146,6 +153,43 @@ def _plot_average_by_kind(output_dir: Path, kind: str, ebn0_db: list[int], resul
     fig.savefig(fname, dpi=150)
     plt.close(fig)
     print(f"  Saved {fname}")
+
+
+def _write_report(
+    output_dir: Path,
+    ebn0_db: list[int],
+    results: dict[tuple[str, int], dict[str, np.ndarray | str]],
+    plots: list[Path],
+) -> Path:
+    lines: list[str] = []
+    lines.append("# BER Report - 10x Symbols")
+    lines.append("")
+    lines.append("This report summarizes the generated BER plots and the adaptive bit cap used per Eb/N0 point.")
+    lines.append("")
+    lines.append(f"- Minimum expected errors per point: {int(MIN_EXPECTED_ERRORS)}")
+    lines.append("- Adaptive bit cap per point: `max(base_num_bits, ceil(20 / BER_expected))`")
+    lines.append(f"- Eb/N0 points: {', '.join(str(eb) for eb in ebn0_db)}")
+    lines.append("")
+
+    for (kind, m), data in results.items():
+        pulse_name = cast(str, data["pulse"])
+        lines.append(f"## {kind.upper()} M={m} / {pulse_name.upper()}")
+        lines.append("")
+        lines.append("| Eb/N0 (dB) | Sim BER | Theory BER | Bits used |")
+        lines.append("| --- | ---: | ---: | ---: |")
+        for eb, sim_ber, theory_ber, bits_used in zip(ebn0_db, data["ber"], data["theory"], data["bits_used"], strict=True):
+            lines.append(f"| {eb} | {sim_ber:.3e} | {theory_ber:.3e} | {int(bits_used)} |")
+        lines.append("")
+
+    lines.append("## Generated Images")
+    lines.append("")
+    for plot in plots:
+        lines.append(f"- [{plot.name}]({plot.name})")
+
+    report_path = output_dir / REPORT_FILENAME
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"  Saved {report_path}")
+    return report_path
 
 
 def run_and_save(
@@ -163,21 +207,28 @@ def run_and_save(
     rng = np.random.default_rng(seed)
 
     results: dict[tuple[str, int], dict[str, np.ndarray | str]] = {}
+    generated_plots: list[Path] = []
     for pulse in DEFAULT_PULSE_CASES:
         for kind, m in DEFAULT_KIND_CASES:
-            sim_ber, theory, num_symbols = _simulate_curve(kind, m, pulse, ebn0_db, num_bits, rng, alpha, fc, sps)
-            print(f"Running: pulse={pulse}, kind={kind}, M={m}, num_symbols={num_symbols} ({num_bits} bits target)")
+            sim_ber, theory, bits_used = _simulate_curve(kind, m, pulse, ebn0_db, num_bits, rng, alpha, fc, sps)
+            print(f"Running: pulse={pulse}, kind={kind}, M={m}, base_bits={num_bits}")
             sim_ber = np.array([
                 _estimate_zero_error_ber(kind, m, eb, ber) for eb, ber in zip(ebn0_db, sim_ber, strict=True)
             ])
-            results[(kind, m)] = {"pulse": pulse, "ber": sim_ber, "theory": theory}
+            results[(kind, m)] = {"pulse": pulse, "ber": sim_ber, "theory": theory, "bits_used": bits_used}
+            case_plot = output_path / f"BER_{pulse.upper()}_{kind.upper()}_M{m}_10x.png"
             _plot_case(output_path, pulse, kind, m, ebn0_db, sim_ber, theory)
+            generated_plots.append(case_plot)
 
     for pulse in DEFAULT_PULSE_CASES:
         _plot_all_modulations(output_path, pulse, ebn0_db, results)
+        generated_plots.append(output_path / f"BER_all_modulations_pulse_{pulse.upper()}_10x.png")
 
     for kind in ["psk", "qam"]:
         _plot_average_by_kind(output_path, kind, ebn0_db, results)
+        generated_plots.append(output_path / f"BER_by_pulse_avg_M_{kind.upper()}_10x.png")
+
+    _write_report(output_path, ebn0_db, results, generated_plots)
 
     print("All BER comparison plots saved to", output_path)
 
