@@ -34,7 +34,6 @@ def params(path):
     """Define os parametros fixos da simulacao."""
     fc = 10.0
     os = 4
-    sps = 16
     alpha = 0.15
     ebn0_points = [0, 4, 8, 12, 16, 20, 24]
     modulation_cases = [("psk", 2), ("psk", 4), ("psk", 8), ("psk", 16), ("qam", 4), ("qam", 16), ("qam", 64)]
@@ -50,7 +49,6 @@ def params(path):
         os,
         output_path,
         pulse_names,
-        sps,
     )
 
 
@@ -76,17 +74,15 @@ def gray_code():
 def mapping_helpers(gray_to_int, int_to_gray, np):
     """Cria constelacoes e funcoes de mapeamento."""
     def qam_constellation(m):
-        """Gera uma constelacao QAM normalizada."""
+        """Gera uma constelacao QAM sem normalizacao."""
         side = int(np.sqrt(m))
         levels = np.arange(-(side - 1), side, 2)
         xv, yv = np.meshgrid(levels, levels[::-1])
-        const = xv.flatten() + 1j * yv.flatten()
-        return const / np.sqrt(np.mean(np.abs(const) ** 2))
+        return xv.flatten() + 1j * yv.flatten()
 
     def psk_constellation(m):
-        """Gera uma constelacao PSK normalizada."""
-        const = np.exp(1j * 2 * np.pi * np.arange(m) / m)
-        return const / np.sqrt(np.mean(np.abs(const) ** 2))
+        """Gera uma constelacao PSK sem normalizacao."""
+        return np.exp(1j * 2 * np.pi * np.arange(m) / m)
 
     def bits_to_symbols(bits, kind, m):
         """Mapeia bits para simbolos usando Gray coding."""
@@ -111,13 +107,13 @@ def mapping_helpers(gray_to_int, int_to_gray, np):
 @app.cell
 def pulse_shape(np):
     """Cria os pulsos de transmissao."""
-    def pulse_coeffs(name, alpha, sps):
-        """Gera pulso NRZ ou RRC normalizado."""
+    def pulse_coeffs(name, alpha, os):
+        """Gera pulso NRZ ou RRC sem normalizacao de energia."""
         if name == "nrz":
-            pulse = np.ones(sps)
+            pulse = np.ones(os)
         else:
             span = 6
-            t = np.arange(-span * sps, span * sps + 1) / sps
+            t = np.arange(-span * os, span * os + 1) / os
             pulse = np.zeros_like(t, dtype=float)
             for i, ti in enumerate(t):
                 if ti == 0:
@@ -154,14 +150,14 @@ def ber_theory(erfc, np):
 @app.cell
 def simulate_link(bits_to_symbols, np, pulse_coeffs, symbols_to_bits):
     """Simula a cadeia transmissor-canal-receptor."""
-    def simulate_link(kind, m, pulse_name, ebn0_db, num_symbols, rng, alpha, fc, os, sps):
+    def simulate_link(kind, m, pulse_name, ebn0_db, num_symbols, rng, alpha, fc, os):
         """Executa uma simulacao unica para uma combinacao de parametros."""
         bits_tx = rng.integers(0, 2, size=num_symbols * int(np.log2(m)))
         symbols_tx, const, b = bits_to_symbols(bits_tx, kind, m)
 
-        pulse = pulse_coeffs(pulse_name, alpha, sps)
-        upsampled = np.zeros(len(symbols_tx) * sps, dtype=complex)
-        upsampled[::sps] = symbols_tx
+        pulse = pulse_coeffs(pulse_name, alpha, os)
+        upsampled = np.zeros(len(symbols_tx) * os, dtype=complex)
+        upsampled[::os] = symbols_tx
         shaped = np.convolve(upsampled, pulse, mode="full")
 
         fs = os * fc
@@ -170,7 +166,8 @@ def simulate_link(bits_to_symbols, np, pulse_coeffs, symbols_to_bits):
         tx = np.sqrt(2) * (shaped.real * np.cos(carrier) - shaped.imag * np.sin(carrier))
 
         ebn0_lin = 10 ** (ebn0_db / 10)
-        sigma = np.sqrt(1 / (2 * b * ebn0_lin))
+        ex = float(np.mean(np.abs(const) ** 2))
+        sigma = np.sqrt(ex / (2 * b * ebn0_lin))
         rx = tx + sigma * rng.standard_normal(tx.size)
 
         i = np.sqrt(2) * rx * np.cos(carrier)
@@ -180,7 +177,7 @@ def simulate_link(bits_to_symbols, np, pulse_coeffs, symbols_to_bits):
         mf = pulse[::-1].conj()
         filtered = np.convolve(bb_rx, mf, mode="full")
         offset = len(pulse) - 1
-        sample_idx = offset + np.arange(len(symbols_tx)) * sps
+        sample_idx = offset + np.arange(len(symbols_tx)) * os
         symbols_rx = filtered[sample_idx]
 
         bits_rx = symbols_to_bits(symbols_rx, const, b)
@@ -201,7 +198,6 @@ def collect_results(
     os,
     pulse_names,
     simulate_link,
-    sps,
     theoretical_ber,
 ):
     """Executa todas as simulacoes e organiza os resultados."""
@@ -217,7 +213,7 @@ def collect_results(
             example_const = None
 
             for _ebn0_db in ebn0_points:
-                ber, symbols_tx, symbols_rx, _const = simulate_link(_kind, _m, _pulse_name, _ebn0_db, num_symbols_target, rng, alpha, fc, os, sps)
+                ber, symbols_tx, symbols_rx, _const = simulate_link(_kind, _m, _pulse_name, _ebn0_db, num_symbols_target, rng, alpha, fc, os)
                 ber_curve.append(ber)
                 rx_by_ebn0.append(symbols_rx)
                 if _ebn0_db == ebn0_points[-1]:
