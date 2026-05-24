@@ -37,6 +37,8 @@ htmlcov/
 # IDEs and editors
 .vscode/
 .idea/
+docs/.obsidian/
+docs/.obsidian/**
 *.sublime-workspace
 *.sublime-project
 copilot_input/
@@ -58,4 +60,10 @@ Thumbs.db
 
 # Generated simulation artifacts (do not version)
 output/
+output/trabalho2_v3/
+output/trabalho2_v3/**
+
+# Project-specific Marimo outputs
+src/trabalho2/output/
+src/trabalho2/output/**
 

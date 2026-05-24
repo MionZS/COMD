@@ -52,6 +52,58 @@ Simular e comparar o desempenho de modulações M-QAM e M-PSK em banda passante 
 
 ## 5. Metodologia Proposta
 
+### 5.0 Modelo do Sistema em Banda Passante
+
+Para deixar o artigo alinhado com o diagrama do enunciado, a metodologia deve começar explicitando a cadeia completa do sistema em banda passante. Uma forma direta de apresentar o modelo é:
+
+```text
+s_k = a_k + j b_k
+```
+
+```text
+x_I(t) = \sum_k a_k p(t - kT_s)
+```
+
+```text
+x_Q(t) = \sum_k b_k p(t - kT_s)
+```
+
+```text
+x(t) = sqrt(2) x_I(t) cos(2*pi*fc*t) - sqrt(2) x_Q(t) sin(2*pi*fc*t)
+```
+
+```text
+Y(t) = x(t) + V(t)
+```
+
+No receptor:
+
+```text
+Y_I(t) = sqrt(2) Y(t) cos(2*pi*fc*t)
+```
+
+```text
+Y_Q(t) = -sqrt(2) Y(t) sin(2*pi*fc*t)
+```
+
+```text
+h(t) = p(T_s - t)
+```
+
+```text
+Y_{I,k} = Y_I(t)|_{t = kT_s}
+```
+
+```text
+Y_{Q,k} = Y_Q(t)|_{t = kT_s}
+```
+
+```text
+\hat{s}_k = argmin_{s_m in C} |(Y_{I,k} + j Y_{Q,k}) - s_m|^2
+```
+
+Essa formulação deixa explícito que o sistema simulado implementa exatamente o pipeline bits → modulação digital → ramos I/Q → pulso p(t) → modulação em banda passante → AWGN → demodulação coerente → filtro casado → amostragem → decisor → bits detectados. No artigo final, vale inserir esse diagrama como Figura 1 no início da metodologia.
+
 ### 5.1 Transmissor
 
 O transmissor será iniciado pela geração de uma sequência pseudoaleatória de bits. Esses bits serão agrupados em blocos de tamanho b, de acordo com a modulação analisada. Cada bloco será convertido em um símbolo complexo pertencente à constelação M-QAM ou M-PSK.

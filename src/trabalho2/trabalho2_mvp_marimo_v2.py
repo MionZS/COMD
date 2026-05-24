@@ -228,6 +228,12 @@ def output_dir_c12(path):
             png.unlink()
         except Exception:
             pass
+    report_path_c12 = output_dir / "stop_report.md"
+    if report_path_c12.exists():
+        try:
+            report_path_c12.unlink()
+        except Exception:
+            pass
     return (output_dir,)
 
 
@@ -236,9 +242,14 @@ def results_c13(ebn0_db, alpha, fc, kind_cases, max_bits_slider, min_errors_slid
     results = {}
     min_errors = int(min_errors_slider.value)
     max_bits = int(max_bits_slider.value)
+    report_lines = ["# Relatório de caso de parada", ""]
+    report_lines.append(f"- Critério mínimo de erros: {min_errors}")
+    report_lines.append(f"- Teto máximo de bits: {max_bits}")
+    report_lines.append("")
 
     for pulse_name in pulse_cases:
         pulse_results = {}
+        report_lines.append(f"## Pulso: {pulse_name.upper()}")
         for kind, m in kind_cases:
             ber_curve = []
             errors_curve = []
@@ -257,6 +268,10 @@ def results_c13(ebn0_db, alpha, fc, kind_cases, max_bits_slider, min_errors_slid
                     example_rx = stats["symbols_rx"]
                     example_const = stats["const"]
 
+            report_lines.append(f"- {kind.upper()} M={m}")
+            for eb, stop_reason, errors, bits in zip(ebn0_db, stop_reasons, errors_curve, bits_curve):
+                report_lines.append(f"  - Eb/N0={eb:.0f} dB: {stop_reason} | erros={int(errors)} | bits={int(bits)}")
+
             pulse_results[(kind, m)] = {
                 "ber": np.array(ber_curve),
                 "errors": np.array(errors_curve),
@@ -269,6 +284,9 @@ def results_c13(ebn0_db, alpha, fc, kind_cases, max_bits_slider, min_errors_slid
             }
         results[pulse_name] = pulse_results
 
+    report_path_c13 = output_dir / "stop_report.md"
+    report_path_c13.write_text("\n".join(report_lines), encoding="utf-8")
+
     return (results,)
 
 
@@ -278,41 +296,93 @@ def plot_case_c14(ebn0_db, kind_cases, output_dir, plt, pulse_cases, results):
     legend_loc_c14 = "upper right"
     ylim_c14 = (1e-5, 1)
 
+    def set_constellation_frame_c14(ax_c14, title_c14):
+        ax_c14.axhline(0, linewidth=0.8, color="0.35")
+        ax_c14.axvline(0, linewidth=0.8, color="0.35")
+        ax_c14.grid(True, alpha=0.3)
+        ax_c14.set_aspect("equal", adjustable="box")
+        ax_c14.set_xlabel("I (componente em fase)")
+        ax_c14.set_ylabel("Q (componente em quadratura)")
+        ax_c14.set_title(title_c14)
+
+    def plot_ideal_overlay_c14(ax_c14, const_c14):
+        ax_c14.scatter(
+            const_c14.real,
+            const_c14.imag,
+            s=40,
+            facecolors="none",
+            edgecolors="white",
+            linewidths=0.8,
+            label="Ideal",
+            zorder=3,
+        )
+
     for pulse_name_c14 in pulse_cases:
         for kind_c14, m_c14 in kind_cases:
             data_c14 = results[pulse_name_c14][(kind_c14, m_c14)]
-            fig_c14, axes_c14 = plt.subplots(1, 2, figsize=(12, 5))
 
-            sim_line_c14 = axes_c14[0].semilogy(ebn0_db, data_c14["ber"], marker="o", linewidth=2, label=f"Simulada {kind_c14.upper()} M={m_c14}")[0]
-            axes_c14[0].semilogy(ebn0_db, data_c14["theory"], linestyle="--", linewidth=1, alpha=0.8, color=sim_line_c14.get_color(), label="Teórica")
-            axes_c14[0].set_xlabel(xlabel_c14)
-            axes_c14[0].set_ylabel("BER")
-            axes_c14[0].set_ylim(ylim_c14)
-            axes_c14[0].grid(True, which="both", alpha=0.3)
-            axes_c14[0].legend(loc=legend_loc_c14, fontsize=9)
-            axes_c14[0].set_title(f"BER: {kind_c14.upper()} M={m_c14} / {pulse_name_c14.upper()} | {', '.join(data_c14['stop_reasons'])}", fontsize=11, fontweight="bold")
+            fig_ber_c14, ax_ber_c14 = plt.subplots(figsize=(8.5, 5))
+            sim_line_c14 = ax_ber_c14.semilogy(ebn0_db, data_c14["ber"], marker="o", linewidth=2, label=f"Simulada {kind_c14.upper()} M={m_c14}")[0]
+            ax_ber_c14.semilogy(ebn0_db, data_c14["theory"], linestyle="--", linewidth=1, alpha=0.8, color=sim_line_c14.get_color(), label="Teórica")
+            ax_ber_c14.set_xlabel(xlabel_c14)
+            ax_ber_c14.set_ylabel("BER")
+            ax_ber_c14.set_ylim(ylim_c14)
+            ax_ber_c14.grid(True, which="both", alpha=0.3)
+            ax_ber_c14.legend(loc=legend_loc_c14, fontsize=9)
+            ax_ber_c14.set_title(f"BER: {kind_c14.upper()} M={m_c14} / {pulse_name_c14.upper()}", fontsize=11, fontweight="bold")
+            fig_ber_c14.tight_layout()
+            fig_ber_c14.savefig(output_dir / f"BER_{pulse_name_c14.upper()}_{kind_c14.upper()}_M{m_c14}.png", dpi=150)
 
             tx_c14 = data_c14["example_tx"]
             rx_c14 = data_c14["example_rx"]
             const_c14 = data_c14["example_const"]
-            if tx_c14 is not None and rx_c14 is not None and const_c14 is not None:
-                axes_c14[1].scatter(tx_c14.real, tx_c14.imag, s=20, label="TX", alpha=0.6, color="blue")
-                axes_c14[1].scatter(rx_c14.real, rx_c14.imag, s=20, label="RX", alpha=0.6, color="orange")
-                axes_c14[1].scatter(const_c14.real, const_c14.imag, s=150, marker="x", label="Ideal", linewidth=2, color="red")
-                axes_c14[1].axis("equal")
-                axes_c14[1].legend(fontsize=9)
-            else:
-                axes_c14[1].text(0.5, 0.5, "No example constellation available", ha="center", va="center")
-                axes_c14[1].set_xticks([])
-                axes_c14[1].set_yticks([])
+            if tx_c14 is None or rx_c14 is None or const_c14 is None:
+                continue
 
-            axes_c14[1].set_xlabel("I (componente em fase)")
-            axes_c14[1].set_ylabel("Q (componente em quadratura)")
-            axes_c14[1].grid(True, alpha=0.3)
-            axes_c14[1].set_title(f"Constelação (Eb/N0 = {ebn0_db[-1]} dB)")
+            max_extent_c14 = max(
+                float(max(abs(tx_c14.real).max(), abs(tx_c14.imag).max())),
+                float(max(abs(rx_c14.real).max(), abs(rx_c14.imag).max())),
+                float(max(abs(const_c14.real).max(), abs(const_c14.imag).max())),
+                1.0,
+            ) * 1.15
 
-            fig_c14.tight_layout()
-            fig_c14.savefig(output_dir / f"BER_{pulse_name_c14.upper()}_{kind_c14.upper()}_M{m_c14}.png", dpi=150)
+            fig_tx_c14, ax_tx_c14 = plt.subplots(figsize=(6, 6))
+            ax_tx_c14.scatter(tx_c14.real, tx_c14.imag, s=18, label="TX", alpha=0.7, color="royalblue")
+            plot_ideal_overlay_c14(ax_tx_c14, const_c14)
+            set_constellation_frame_c14(ax_tx_c14, f"Transmitido - {kind_c14.upper()} M={m_c14} / {pulse_name_c14.upper()}")
+            ax_tx_c14.set_xlim(-max_extent_c14, max_extent_c14)
+            ax_tx_c14.set_ylim(-max_extent_c14, max_extent_c14)
+            ax_tx_c14.legend(fontsize=9)
+            fig_tx_c14.tight_layout()
+            fig_tx_c14.savefig(output_dir / f"CONST_TX_{pulse_name_c14.upper()}_{kind_c14.upper()}_M{m_c14}.png", dpi=150)
+
+            fig_rx_c14, ax_rx_c14 = plt.subplots(figsize=(6, 6))
+            ax_rx_c14.scatter(rx_c14.real, rx_c14.imag, s=18, label="RX", alpha=0.7, color="darkorange")
+            plot_ideal_overlay_c14(ax_rx_c14, const_c14)
+            set_constellation_frame_c14(ax_rx_c14, f"Recebido - {kind_c14.upper()} M={m_c14} / {pulse_name_c14.upper()}")
+            ax_rx_c14.set_xlim(-max_extent_c14, max_extent_c14)
+            ax_rx_c14.set_ylim(-max_extent_c14, max_extent_c14)
+            ax_rx_c14.legend(fontsize=9)
+            fig_rx_c14.tight_layout()
+            fig_rx_c14.savefig(output_dir / f"CONST_RX_{pulse_name_c14.upper()}_{kind_c14.upper()}_M{m_c14}.png", dpi=150)
+
+            fig_heat_c14, ax_heat_c14 = plt.subplots(figsize=(6, 6))
+            heat_c14 = ax_heat_c14.hist2d(
+                rx_c14.real,
+                rx_c14.imag,
+                bins=120,
+                range=[[-max_extent_c14, max_extent_c14], [-max_extent_c14, max_extent_c14]],
+                cmap="magma",
+            )
+            plot_ideal_overlay_c14(ax_heat_c14, const_c14)
+            set_constellation_frame_c14(ax_heat_c14, f"Heatmap RX - {kind_c14.upper()} M={m_c14} / {pulse_name_c14.upper()}")
+            ax_heat_c14.set_xlim(-max_extent_c14, max_extent_c14)
+            ax_heat_c14.set_ylim(-max_extent_c14, max_extent_c14)
+            fig_heat_c14.colorbar(heat_c14[3], ax=ax_heat_c14, label="Densidade")
+            ax_heat_c14.legend(fontsize=9)
+            fig_heat_c14.tight_layout()
+            fig_heat_c14.savefig(output_dir / f"CONST_HEAT_{pulse_name_c14.upper()}_{kind_c14.upper()}_M{m_c14}.png", dpi=150)
+
             plt.show()
 
 

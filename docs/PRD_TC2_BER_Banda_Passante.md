@@ -20,6 +20,44 @@ O sistema segue uma cadeia clássica de comunicação digital: geração de bits
 
 Desenvolver uma simulação computacional reprodutível em Python capaz de gerar as figuras e os dados necessários para um relatório IEEE sobre desempenho BER de modulações digitais em canal AWGN.
 
+Para blindar a redação do artigo contra ambiguidades, recomenda-se abrir a metodologia com um subtítulo de modelo em banda passante, antes da descrição de transmissor, canal e receptor.
+
+```text
+s_k = a_k + j b_k
+```
+
+```text
+x_I(t) = \sum_k a_k p(t - kT_s)
+```
+
+```text
+x_Q(t) = \sum_k b_k p(t - kT_s)
+```
+
+```text
+x(t) = sqrt(2) x_I(t) cos(2*pi*fc*t) - sqrt(2) x_Q(t) sin(2*pi*fc*t)
+```
+
+```text
+Y(t) = x(t) + V(t)
+```
+
+```text
+Y_I(t) = sqrt(2) Y(t) cos(2*pi*fc*t)
+```
+
+```text
+Y_Q(t) = -sqrt(2) Y(t) sin(2*pi*fc*t)
+```
+
+```text
+h(t) = p(T_s - t)
+```
+
+```text
+\hat{s}_k = argmin_{s_m in C} |(Y_{I,k} + j Y_{Q,k}) - s_m|^2
+```
+
 O produto deve permitir comparar:
 
 - M-QAM com b = 2, 4 e 6 bits por símbolo, isto é, M = 4, 16 e 64.

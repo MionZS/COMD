@@ -467,15 +467,21 @@ def plots_final_c13(
                 axes_c13[1].set_xticks([])
                 axes_c13[1].set_yticks([])
             else:
-                axes_c13[1].scatter(example_tx_c13.real, example_tx_c13.imag, s=20, label="TX", alpha=0.6, color="blue")
-                axes_c13[1].scatter(example_rx_c13.real, example_rx_c13.imag, s=20, label="RX", alpha=0.6, color="orange")
-                axes_c13[1].scatter(example_const_c13.real, example_const_c13.imag, s=150, marker="x", label="Ideal", linewidth=2, color="red")
-                axes_c13[1].set_xlabel("I (componente em fase)", fontsize=12)
-                axes_c13[1].set_ylabel("Q (componente em quadratura)", fontsize=12)
-                axes_c13[1].grid(True, alpha=0.3)
-                axes_c13[1].legend(fontsize=9)
-                axes_c13[1].set_title(f"Constelação (Eb/N0 = {ebn0_db_c04[-1]} dB)")
-                axes_c13[1].axis("equal")
+                axc = axes_c13[1]
+                # TX: keep visible but smaller
+                axc.scatter(example_tx_c13.real, example_tx_c13.imag, s=20, label="TX", alpha=0.6, color="blue")
+                # RX: denser, light points (match slides preview)
+                axc.scatter(example_rx_c13.real, example_rx_c13.imag, s=8, label="RX", alpha=0.25, color="orange")
+                # Ideal constellation: clear 'x' markers
+                axc.scatter(example_const_c13.real, example_const_c13.imag, s=80, marker="x", label="Ideal", linewidth=2, color="red")
+                axc.axhline(0, linewidth=0.8)
+                axc.axvline(0, linewidth=0.8)
+                axc.grid(True, alpha=0.3)
+                axc.set_xlabel("Componente em fase I", fontsize=12)
+                axc.set_ylabel("Componente em quadratura Q", fontsize=12)
+                axc.legend(fontsize=9)
+                axc.set_title(f"Constelação (Eb/N0 = {ebn0_db_c04[-1]} dB)")
+                axc.axis("equal")
 
             plt_c01.tight_layout()
             plt_c01.show()
