@@ -24,9 +24,9 @@ def title(mo):
     # Trabalho 2 - MVP em Marimo v3
 
     Versao simples e direta da simulacao de BER em banda passante.
-    Mantem a mesma cadeia matematica do modelo, sem protecoes extras.
+    Mantem a mesma cadeia matematica do modelo.
     """)
-    return ()
+    return
 
 
 @app.cell
@@ -38,14 +38,14 @@ def params(path):
     ebn0_points = [0, 4, 8, 12, 16, 20, 24]
     modulation_cases = [("psk", 2), ("psk", 4), ("psk", 8), ("psk", 16), ("qam", 4), ("qam", 16), ("qam", 64)]
     pulse_names = ["nrz", "rrc"]
-    num_symbols_target = 20_000
+    num_bits_target = 2_000_000
     output_path = path("output/trabalho2_v3")
     return (
         alpha,
         ebn0_points,
         fc,
         modulation_cases,
-        num_symbols_target,
+        num_bits_target,
         os,
         output_path,
         pulse_names,
@@ -112,7 +112,7 @@ def pulse_shape(np):
         if name == "nrz":
             pulse = np.ones(os)
         else:
-            span = 6
+            span = 8
             t = np.arange(-span * os, span * os + 1) / os
             pulse = np.zeros_like(t, dtype=float)
             for i, ti in enumerate(t):
@@ -194,7 +194,7 @@ def collect_results(
     fc,
     modulation_cases,
     np,
-    num_symbols_target,
+    num_bits_target,
     os,
     pulse_names,
     simulate_link,
@@ -207,6 +207,8 @@ def collect_results(
     for _pulse_name in pulse_names:
         pulse_results = {}
         for _kind, _m in modulation_cases:
+            bits_per_symbol = int(np.log2(_m))
+            num_symbols_target = int(np.ceil(num_bits_target / bits_per_symbol))
             ber_curve = []
             example_tx = None
             rx_by_ebn0 = []
@@ -283,23 +285,110 @@ def plot_ber(
         ber_path = pulse_path / "ber"
         ber_path.mkdir(parents=True, exist_ok=True)
 
-        fig_ber_c06, ax_ber_c06 = plt.subplots(figsize=(9, 5))
-        for _kind, _m in modulation_cases:
-            data = results[_pulse_name][(_kind, _m)]
-            sim_line = ax_ber_c06.semilogy(ebn0_points, data["ber"], marker="o", linewidth=1.6, label=f"SIM {_kind.upper()} M={_m}")[0]
-            ax_ber_c06.semilogy(ebn0_points, data["theory"], linestyle="--", linewidth=1.2, alpha=0.85, color=sim_line.get_color(), label=f"TH {_kind.upper()} M={_m}")
-        ax_ber_c06.set_xlabel("Eb/N0 (dB)")
-        ax_ber_c06.set_ylabel("BER")
-        ax_ber_c06.set_ylim(1e-5, 1)
-        ax_ber_c06.set_title(f"BER comparativa - pulso {_pulse_name.upper()}")
-        ax_ber_c06.grid(True, which="both", alpha=0.3)
-        ax_ber_c06.legend(fontsize=8)
-        fig_ber_c06.tight_layout()
-        fig_ber_c06.savefig(ber_path / f"BER_{_pulse_name.upper()}.png", dpi=150)
-        ber_figures.append(fig_ber_c06)
+        for _kind in ("psk", "qam"):
+            fig_ber_c06, ax_ber_c06 = plt.subplots(figsize=(9, 5))
+            kind_cases = [(_case_kind, _m) for _case_kind, _m in modulation_cases if _case_kind == _kind]
+
+            for _case_kind, _m in kind_cases:
+                data = results[_pulse_name][(_case_kind, _m)]
+                sim_line = ax_ber_c06.semilogy(
+                    ebn0_points,
+                    data["ber"],
+                    marker="o",
+                    linewidth=1.6,
+                    label=f"SIM {_kind.upper()} M={_m}",
+                )[0]
+                ax_ber_c06.semilogy(
+                    ebn0_points,
+                    data["theory"],
+                    linestyle="--",
+                    linewidth=1.2,
+                    alpha=0.85,
+                    color=sim_line.get_color(),
+                    label=f"TH {_kind.upper()} M={_m}",
+                )
+
+            ax_ber_c06.set_xlabel("Eb/N0 (dB)")
+            ax_ber_c06.set_ylabel("BER")
+            ax_ber_c06.set_ylim(1e-5, 1)
+            ax_ber_c06.set_title(f"BER {_kind.upper()} - pulso {_pulse_name.upper()}")
+            ax_ber_c06.grid(True, which="both", alpha=0.3)
+            ax_ber_c06.legend(fontsize=8)
+            fig_ber_c06.tight_layout()
+            fig_ber_c06.savefig(ber_path / f"BER_{_kind.upper()}_{_pulse_name.upper()}.png", dpi=150)
+            ber_figures.append(fig_ber_c06)
+            plt.show()
+            plt.close(fig_ber_c06)
+    return
+
+
+@app.cell
+def compare_ber_by_pulse(
+    ebn0_points,
+    modulation_cases,
+    np,
+    output_path,
+    plt,
+    results,
+):
+    """Compara BER por pulso para a mesma modulacao e mesmo M."""
+    comparison_path = output_path / "comparison"
+    comparison_path.mkdir(parents=True, exist_ok=True)
+
+    report_lines = [
+        "BER pulse comparison report",
+        "",
+        "Same modulation and M, varying only the pulse (NRZ vs RRC).",
+        "Each block lists simulated BER only; the theory is identical by construction.",
+        "",
+    ]
+
+    for _kind in ("psk", "qam"):
+        pulse_kind_cases = [(_case_kind, _m) for _case_kind, _m in modulation_cases if _case_kind == _kind]
+        fig_cmp, axes_cmp = plt.subplots(len(pulse_kind_cases), 1, figsize=(9, 3.4 * len(pulse_kind_cases)), sharex=True)
+        if len(pulse_kind_cases) == 1:
+            axes_cmp = [axes_cmp]
+
+        report_lines.append(f"[{_kind.upper()}]")
+
+        for ax_cmp, (_case_kind, _m) in zip(axes_cmp, pulse_kind_cases):
+            nrz_data = results["nrz"][(_case_kind, _m)]["ber"]
+            rrc_data = results["rrc"][(_case_kind, _m)]["ber"]
+
+            ax_cmp.semilogy(ebn0_points, nrz_data, marker="o", linewidth=1.6, label="NRZ")
+            ax_cmp.semilogy(ebn0_points, rrc_data, marker="s", linewidth=1.6, label="RRC")
+            ax_cmp.set_ylabel("BER")
+            ax_cmp.set_title(f"{_kind.upper()} M={_m}")
+            ax_cmp.grid(True, which="both", alpha=0.3)
+            ax_cmp.legend(fontsize=8)
+
+            diff = np.abs(rrc_data - nrz_data)
+            abs_max = float(np.max(diff))
+            abs_mean = float(np.mean(diff))
+            ref = np.maximum(np.maximum(nrz_data, rrc_data), 1e-12)
+            rel_max = float(np.max(diff / ref))
+            idx_max = int(np.argmax(diff))
+            ratio_last = float(rrc_data[-1] / max(nrz_data[-1], 1e-12))
+
+            report_lines.append(
+                f"  M={_m}: max_abs_diff={abs_max:.6e}, mean_abs_diff={abs_mean:.6e}, max_rel_diff={rel_max:.6e}, ratio_last(RRC/NRZ)={ratio_last:.6e}, max_at_EbN0={ebn0_points[idx_max]} dB"
+            )
+            report_lines.append("  Eb/N0 | BER_NRZ | BER_RRC | ABS_DIFF | RATIO")
+            for _ebn0_db, _nrz, _rrc, _abs in zip(ebn0_points, nrz_data, rrc_data, diff):
+                _ratio = _rrc / max(_nrz, 1e-12)
+                report_lines.append(
+                    f"  {_ebn0_db:>4} | {_nrz:.6e} | {_rrc:.6e} | {_abs:.6e} | {_ratio:.6e}"
+                )
+            report_lines.append("")
+
+        axes_cmp[-1].set_xlabel("Eb/N0 (dB)")
+        fig_cmp.tight_layout()
+        fig_cmp.savefig(comparison_path / f"BER_COMPARE_{_kind.upper()}.png", dpi=150)
         plt.show()
-        plt.close(fig_ber_c06)
-    return ()
+        plt.close(fig_cmp)
+
+    (comparison_path / "BER_pulse_comparison.txt").write_text("\n".join(report_lines), encoding="utf-8")
+    return
 
 
 @app.cell
@@ -344,7 +433,7 @@ def plot_rx(
                 fig_rx.savefig(_rx_path / f"CONST_RX_{_kind.upper()}_M{_m}_EBN0_{_ebn0_db}.png", dpi=150)
                 plt.show()
                 plt.close(fig_rx)
-    return ()
+    return
 
 
 @app.cell
@@ -402,7 +491,7 @@ def plot_heatmap(
                 fig_heat.savefig(_heatmap_path / f"CONST_HEAT_{_kind.upper()}_M{_m}_EBN0_{_ebn0_db}.png", dpi=150)
                 plt.show()
                 plt.close(fig_heat)
-    return ()
+    return
 
 
 if __name__ == "__main__":
