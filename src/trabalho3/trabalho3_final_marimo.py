@@ -371,6 +371,9 @@ def ser_monte_carlo(
     ser_per_carrier = np.zeros((len(snr_mc_db), N))
     ser_mean_orig = np.zeros(len(snr_mc_db))
     ser_mean_disabled = np.zeros(len(snr_mc_db))
+    errors_per_carrier = np.zeros((len(snr_mc_db), N), dtype=np.int64)
+    errors_orig = np.zeros(len(snr_mc_db), dtype=np.int64)
+    errors_disabled = np.zeros(len(snr_mc_db), dtype=np.int64)
 
     # Curva teórica ideal na malha fina (canal AWGN)
     ser_ideal_theory = ser_ideal_mqam(M, snr_theory_db)
@@ -408,6 +411,8 @@ def ser_monte_carlo(
         _errors = _rx_idx != _tx_idx
         ser_per_carrier[_i, :] = np.mean(_errors, axis=0)
         ser_mean_orig[_i] = float(np.mean(_errors))
+        errors_per_carrier[_i, :] = np.sum(_errors, axis=0)
+        errors_orig[_i] = int(np.sum(_errors))
 
         # --- Simulação com descarte (27 portadoras) ---
         _rng_dis = np.random.default_rng(seed + 5000 + int(_snr_db))
@@ -421,11 +426,13 @@ def ser_monte_carlo(
         ).reshape(num_blocks_mc, len(_active_d))
         _errors_d = _rx_idx_d != _tx_idx_d[:, _active_d]
         ser_mean_disabled[_i] = float(np.mean(_errors_d))
+        errors_disabled[_i] = int(np.sum(_errors_d))
 
     return (
         ser_per_carrier, ser_mean_orig, ser_mean_disabled,
         ser_ideal_theory, disabled_mask,
         ser_ofdm_zf_theory, ser_ofdm_zf_theory_disabled,
+        errors_per_carrier, errors_orig, errors_disabled,
     )
 
 
@@ -563,31 +570,54 @@ def fig_constellations(
 #   - Média OFDM (Monte Carlo): PONTOS
 #   - OFDM+ZF (teórica): LINHA CONTÍNUA — mesma convenção de SNR do MC
 #   - Canal ideal (teórica): LINHA CONTÍNUA com malha fina
+#   - Marcador 'x' quando < 100 erros (não convergido)
 # ─────────────────────────────────────────────────────────────
 @app.cell
 def fig_ser_all_carriers(
     num_blocks_mc, N, np, output_dir, plt,
     safe_ser_for_plot, ser_ideal_theory, ser_mean_orig,
     ser_ofdm_zf_theory, ser_per_carrier, snr_mc_db, snr_theory_db,
+    errors_per_carrier, errors_orig,
 ):
     floor_per_carrier = 0.5 / num_blocks_mc
     floor_mean = floor_per_carrier / N
+    min_errors = 100
 
     _fig, _ax = plt.subplots(figsize=(10, 6))
 
     # 32 curvas individuais: PONTOS sem linhas
     for _k in range(N):
-        _ax.semilogy(
-            snr_mc_db, safe_ser_for_plot(ser_per_carrier[:, _k], floor_per_carrier),
-            marker=".", linestyle="none", markersize=3, alpha=0.45,
-        )
+        _conv = errors_per_carrier[:, _k] >= min_errors
+        _unconv = ~_conv
+        # Convergidos: pontos cheios
+        if np.any(_conv):
+            _ax.semilogy(
+                snr_mc_db[_conv], ser_per_carrier[_conv, _k],
+                marker=".", linestyle="none", markersize=3, alpha=0.45,
+            )
+        # Não convergidos: 'x' pequeno
+        if np.any(_unconv):
+            _ax.semilogy(
+                snr_mc_db[_unconv], ser_per_carrier[_unconv, _k],
+                marker="x", linestyle="none", markersize=3, alpha=0.25,
+            )
 
-    # Média OFDM: PONTOS
-    _ax.semilogy(
-        snr_mc_db, safe_ser_for_plot(ser_mean_orig, floor_mean),
-        marker="o", linestyle="none", markersize=6, color="C0",
-        label="Média OFDM — 32 portadoras (Monte Carlo)",
-    )
+    # Média OFDM: PONTOS (convergido = cheio, não convergido = oco)
+    _conv_avg = errors_orig >= min_errors
+    _unconv_avg = ~_conv_avg
+    if np.any(_conv_avg):
+        _ax.semilogy(
+            snr_mc_db[_conv_avg], safe_ser_for_plot(ser_mean_orig[_conv_avg], floor_mean),
+            marker="o", linestyle="none", markersize=6, color="C0",
+            label="Média OFDM — 32 portadoras (≥100 erros)",
+        )
+    if np.any(_unconv_avg):
+        _ax.semilogy(
+            snr_mc_db[_unconv_avg], safe_ser_for_plot(ser_mean_orig[_unconv_avg], floor_mean),
+            marker="o", linestyle="none", markersize=6, color="C0",
+            markerfacecolor="none", markeredgecolor="C0", markeredgewidth=1.2,
+            label="Média OFDM — 32 portadoras (<100 erros)",
+        )
 
     # OFDM+ZF teórica: LINHA CONTÍNUA (deve coincidir com MC)
     _ax.semilogy(
@@ -621,6 +651,7 @@ def fig_ser_all_carriers(
 #   - Original e descarte (Monte Carlo): PONTOS
 #   - OFDM+ZF (teórica): LINHA CONTÍNUA — mesma convenção de SNR do MC
 #   - Canal ideal (teórica): LINHA CONTÍNUA
+#   - Marcadores ocos quando < 100 erros (não convergido)
 # ─────────────────────────────────────────────────────────────
 @app.cell
 def fig_bit_loading(
@@ -628,19 +659,31 @@ def fig_bit_loading(
     safe_ser_for_plot, ser_ideal_theory, ser_mean_disabled,
     ser_mean_orig, ser_ofdm_zf_theory, ser_ofdm_zf_theory_disabled,
     snr_mc_db, snr_theory_db, worst_idx,
+    errors_orig, errors_disabled,
 ):
     disabled_n = N - len(worst_idx)
     floor_orig = 0.5 / (num_blocks_mc * N)
     floor_dis = 0.5 / (num_blocks_mc * disabled_n)
+    min_errors = 100
 
     _fig, _ax = plt.subplots(figsize=(9, 5.5))
 
-    # Original: PONTOS
-    _ax.semilogy(
-        snr_mc_db, safe_ser_for_plot(ser_mean_orig, floor_orig),
-        marker="o", linestyle="none", markersize=6, color="C0",
-        label="Média original — 32 portadoras (Monte Carlo)",
-    )
+    # Original: PONTOS (cheio = convergido, oco = não convergido)
+    _conv_o = errors_orig >= min_errors
+    _unconv_o = ~_conv_o
+    if np.any(_conv_o):
+        _ax.semilogy(
+            snr_mc_db[_conv_o], safe_ser_for_plot(ser_mean_orig[_conv_o], floor_orig),
+            marker="o", linestyle="none", markersize=6, color="C0",
+            label="Média original — 32 portadoras (≥100 erros)",
+        )
+    if np.any(_unconv_o):
+        _ax.semilogy(
+            snr_mc_db[_unconv_o], safe_ser_for_plot(ser_mean_orig[_unconv_o], floor_orig),
+            marker="o", linestyle="none", markersize=6, color="C0",
+            markerfacecolor="none", markeredgecolor="C0", markeredgewidth=1.2,
+            label="Média original — 32 portadoras (<100 erros)",
+        )
 
     # OFDM+ZF teórica (original): LINHA CONTÍNUA (deve coincidir com MC)
     _ax.semilogy(
@@ -649,12 +692,22 @@ def fig_bit_loading(
         label="Média OFDM+ZF — 32 portadoras (teórica)",
     )
 
-    # Com descarte: PONTOS
-    _ax.semilogy(
-        snr_mc_db, safe_ser_for_plot(ser_mean_disabled, floor_dis),
-        marker="s", linestyle="none", markersize=6, color="C2",
-        label=f"Média com descarte — {disabled_n} portadoras (Monte Carlo)",
-    )
+    # Com descarte: PONTOS (cheio = convergido, oco = não convergido)
+    _conv_d = errors_disabled >= min_errors
+    _unconv_d = ~_conv_d
+    if np.any(_conv_d):
+        _ax.semilogy(
+            snr_mc_db[_conv_d], safe_ser_for_plot(ser_mean_disabled[_conv_d], floor_dis),
+            marker="s", linestyle="none", markersize=6, color="C2",
+            label=f"Média com descarte — {disabled_n} portadoras (≥100 erros)",
+        )
+    if np.any(_unconv_d):
+        _ax.semilogy(
+            snr_mc_db[_unconv_d], safe_ser_for_plot(ser_mean_disabled[_unconv_d], floor_dis),
+            marker="s", linestyle="none", markersize=6, color="C2",
+            markerfacecolor="none", markeredgecolor="C2", markeredgewidth=1.2,
+            label=f"Média com descarte — {disabled_n} portadoras (<100 erros)",
+        )
 
     # OFDM+ZF teórica (descarte): LINHA CONTÍNUA (deve coincidir com MC)
     _ax.semilogy(
@@ -707,11 +760,9 @@ def numeric_reports(
                      f"ganho = {20*np.log10(h_mag[_k]):.2f} dB")
     lines.append("")
     lines.append(f"{'SNR_dB':>6} | {'Original':>12} | {'Descarte':>12} | {'Ideal':>12}")
-    for _snr, _orig, _disc, _ideal in zip(
-        snr_mc_db, ser_mean_orig, ser_mean_disabled,
-        ser_ideal_theory[::int(len(snr_theory_db) / len(snr_mc_db))],
-    ):
-        lines.append(f"{_snr:6.0f} | {_orig:.6e} | {_disc:.6e} | {_ideal:.6e}")
+    for _snr, _orig, _disc in zip(snr_mc_db, ser_mean_orig, ser_mean_disabled):
+        _ideal_val = ser_ideal_theory[np.argmin(np.abs(snr_theory_db - _snr))]
+        lines.append(f"{_snr:6.0f} | {_orig:.6e} | {_disc:.6e} | {_ideal_val:.6e}")
 
     (output_dir / "tables" / "numeric_report.txt").write_text(
         "\n".join(lines), encoding="utf-8"
