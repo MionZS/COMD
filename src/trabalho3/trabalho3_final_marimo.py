@@ -50,7 +50,7 @@ def params(Path):
     snr_mc_db = np.arange(0, 31, 2)   # pontos Monte Carlo (0 a 30 dB, step 2)
     snr_theory_db = np.linspace(0, 30, 601)  # malha fina para curva teórica
     snr_const_db = 30.0         # SNR para diagramas de constelação
-    num_blocks_mc = 20_000      # blocos OFDM para curva SER
+    num_blocks_mc = 500_000     # blocos OFDM para curva SER
     num_blocks_const = 4_000    # blocos OFDM para constelações
     seed = 903_2026
     output_dir = Path("output/trabalho3_final")
@@ -184,8 +184,11 @@ def ofdm_modulator(add_cyclic_prefix, np):
 @app.cell
 def channel_awgn(channel_response, np):
     def apply_multipath_channel(x_time_cp, h):
-        """Convolução linear com o canal FIR por bloco OFDM."""
-        return np.array([np.convolve(block, h, mode="full") for block in x_time_cp])
+        """Convolução linear com o canal FIR por bloco OFDM (vetorizada via FFT)."""
+        n_fft = x_time_cp.shape[1] + len(h) - 1
+        X_fft = np.fft.fft(x_time_cp, n=n_fft, axis=1)
+        H_fft = np.fft.fft(h, n=n_fft)
+        return np.fft.ifft(X_fft * H_fft[np.newaxis, :], axis=1)
 
     def add_awgn_avg_snr(y_time_cp, h, n, snr_db, rng):
         """
