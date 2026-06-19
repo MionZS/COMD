@@ -1,0 +1,68 @@
+% Equation bank for OFDM 16-QAM project
+% Copy into the IEEE report as needed.
+
+\subsection{Constelação 16-QAM}
+Para a modulação 16-QAM, cada símbolo transporta
+\begin{equation}
+    b = \log_2(16)=4
+\end{equation}
+bits. A constelação quadrada não normalizada utiliza níveis $I,Q\in\{-3,-1,+1,+3\}$. A energia média é $E_s=10$, de modo que a constelação normalizada é dada por
+\begin{equation}
+    s_m = \frac{I_m+jQ_m}{\sqrt{10}}, \qquad \mathbb{E}\{|s_m|^2\}=1.
+\end{equation}
+
+\subsection{Canal discreto}
+O canal multipercurso especificado é
+\begin{equation}
+    h[n]=[0.3,\,-0.5,\,0,\,1,\,0.2,\,-0.3]^T.
+\end{equation}
+Sua resposta em frequência para $N=32$ subportadoras é
+\begin{equation}
+    H[k]=\sum_{n=0}^{5} h[n]e^{-j2\pi kn/32}, \qquad k=0,1,\ldots,31.
+\end{equation}
+
+\subsection{Prefixo cíclico}
+Como o canal possui comprimento $L_h=6$, sua memória é $L_h-1=5$. Assim, o prefixo cíclico mínimo é
+\begin{equation}
+    N_{CP,min}=L_h-1=5.
+\end{equation}
+
+\subsection{Modelo OFDM no domínio da frequência}
+Com prefixo cíclico suficiente, a convolução linear do canal equivale a uma convolução circular no bloco útil. Após a DFT, cada subportadora obedece a
+\begin{equation}
+    Y[k]=H[k]X[k]+V[k].
+\end{equation}
+
+\subsection{Equalização ZF}
+O equalizador zero-forcing é
+\begin{equation}
+    E[k]=\frac{1}{H[k]},
+\end{equation}
+e a saída equalizada é
+\begin{equation}
+    \hat{X}[k]=\frac{Y[k]}{H[k]}=X[k]+\frac{V[k]}{H[k]}.
+\end{equation}
+A variância do ruído após equalização é, portanto,
+\begin{equation}
+    \sigma_{eq,k}^{2}=\frac{\sigma_V^2}{|H[k]|^2}.
+\end{equation}
+
+\subsection{Normalização de ruído}
+Para a convenção de SNR média no domínio da frequência antes da equalização,
+\begin{equation}
+    \sigma_V^2=\frac{\frac{1}{N}\sum_{k=0}^{N-1}|H[k]|^2}{\mathrm{SNR}_{lin}}=\frac{1.47}{\mathrm{SNR}_{lin}}.
+\end{equation}
+Com a convenção da FFT do NumPy, se o ruído for somado no domínio do tempo,
+\begin{equation}
+    \sigma_t^2=\frac{\sigma_V^2}{N}=\frac{1.47}{32\,\mathrm{SNR}_{lin}}.
+\end{equation}
+
+\subsection{SER}
+A taxa de erro de símbolo da subportadora $k$ é estimada por
+\begin{equation}
+    \mathrm{SER}_k=\frac{N_{err,k}}{N_{sym,k}}.
+\end{equation}
+A SER média global é
+\begin{equation}
+    \mathrm{SER}_{avg}=\frac{\sum_k N_{err,k}}{\sum_k N_{sym,k}}.
+\end{equation}

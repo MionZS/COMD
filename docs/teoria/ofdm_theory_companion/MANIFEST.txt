@@ -1,0 +1,17 @@
+README.md
+figures/channel_gain_reference.png
+latex_snippets/equation_bank.tex
+latex_snippets/fundamentacao_expandida.tex
+source_notes/source_selection.md
+tables/channel_frequency_response.csv
+tables/worst_subcarriers.csv
+theory/01_qam_gray_detection.md
+theory/02_awgn_snr_ser.md
+theory/03_multipath_frequency_selective_channel.md
+theory/04_ofdm_cyclic_prefix_fft_model.md
+theory/05_zf_equalization_noise_enhancement.md
+theory/06_bit_loading_carrier_disabling.md
+theory/07_report_and_code_checklist.md
+validation/channel_frequency_response.csv
+validation/compute_ofdm_constants.py
+validation/computed_constants.json

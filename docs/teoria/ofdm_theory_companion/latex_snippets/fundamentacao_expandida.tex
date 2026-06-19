@@ -1,0 +1,14 @@
+% Expanded theoretical foundation snippet for the IEEE report.
+% This is original synthesized text, not copied from the source PDFs.
+
+\section{Fundamentação Teórica Expandida}
+
+A modulação 16-QAM representa grupos de quatro bits por símbolos complexos no plano em fase e quadratura. Na constelação quadrada usual, os níveis de cada eixo são $\{-3,-1,+1,+3\}$. Para que a escala do ruído seja controlada de forma direta, a constelação foi normalizada por $\sqrt{10}$, resultando em energia média unitária por símbolo.
+
+O canal especificado é um filtro FIR de seis coeficientes. Como sua resposta em frequência não é constante ao longo das 32 amostras da DFT, o canal apresenta seletividade em frequência. Algumas subportadoras sofrem grande atenuação, formando um entalhe espectral próximo às portadoras centrais. Esse comportamento é o motivo físico para a diferença visual entre as constelações equalizadas de portadoras boas e ruins.
+
+No sistema OFDM, um bloco de símbolos QAM é aplicado a uma IFFT, gerando um símbolo OFDM no tempo. O prefixo cíclico copia as últimas amostras do bloco e as insere no início da transmissão. Quando o comprimento do prefixo é pelo menos igual à memória do canal, a convolução linear do canal, vista dentro do intervalo útil do bloco, torna-se equivalente a uma convolução circular. Dessa forma, a FFT no receptor diagonaliza o canal e produz subcanais escalares independentes, modelados por $Y[k]=H[k]X[k]+V[k]$.
+
+A equalização zero-forcing remove o ganho complexo do canal dividindo cada subportadora por $H[k]$. Embora essa operação compense a amplitude e a fase do canal, ela também divide o ruído por $H[k]$. Portanto, portadoras com pequeno $|H[k]|$ apresentam forte amplificação de ruído após a equalização. Esse efeito explica por que a SER média do sistema OFDM é dominada pelas portadoras em desvanecimento profundo.
+
+O descarte das cinco piores portadoras é uma forma extrema e simplificada de carregamento de bits. Em vez de adaptar a ordem de modulação ou a potência por subcanal, a implementação remove as portadoras de menor ganho. A melhora observada na SER média não decorre de alteração física do canal, mas da exclusão das portadoras nas quais o ZF produziria maior amplificação de ruído.
