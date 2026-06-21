@@ -579,15 +579,15 @@ def fig_ser_all_carriers(
     ser_ofdm_zf_theory, ser_per_carrier, snr_mc_db, snr_theory_db,
     errors_per_carrier, errors_orig,
 ):
-    floor_per_carrier = 0.5 / num_blocks_mc
-    floor_mean = floor_per_carrier / N
-    min_errors = 100
+    _floor_per_carrier = 0.5 / num_blocks_mc
+    _floor_mean = _floor_per_carrier / N
+    _min_errors = 100
 
     _fig, _ax = plt.subplots(figsize=(10, 6))
 
     # 32 curvas individuais: PONTOS sem linhas
     for _k in range(N):
-        _conv = errors_per_carrier[:, _k] >= min_errors
+        _conv = errors_per_carrier[:, _k] >= _min_errors
         _unconv = ~_conv
         # Convergidos: pontos cheios
         if np.any(_conv):
@@ -603,17 +603,17 @@ def fig_ser_all_carriers(
             )
 
     # Média OFDM: PONTOS (convergido = cheio, não convergido = oco)
-    _conv_avg = errors_orig >= min_errors
+    _conv_avg = errors_orig >= _min_errors
     _unconv_avg = ~_conv_avg
     if np.any(_conv_avg):
         _ax.semilogy(
-            snr_mc_db[_conv_avg], safe_ser_for_plot(ser_mean_orig[_conv_avg], floor_mean),
+            snr_mc_db[_conv_avg], safe_ser_for_plot(ser_mean_orig[_conv_avg], _floor_mean),
             marker="o", linestyle="none", markersize=6, color="C0",
             label="Média OFDM — 32 portadoras (≥100 erros)",
         )
     if np.any(_unconv_avg):
         _ax.semilogy(
-            snr_mc_db[_unconv_avg], safe_ser_for_plot(ser_mean_orig[_unconv_avg], floor_mean),
+            snr_mc_db[_unconv_avg], safe_ser_for_plot(ser_mean_orig[_unconv_avg], _floor_mean),
             marker="o", linestyle="none", markersize=6, color="C0",
             markerfacecolor="none", markeredgecolor="C0", markeredgewidth=1.2,
             label="Média OFDM — 32 portadoras (<100 erros)",
@@ -661,25 +661,25 @@ def fig_bit_loading(
     snr_mc_db, snr_theory_db, worst_idx,
     errors_orig, errors_disabled,
 ):
-    disabled_n = N - len(worst_idx)
-    floor_orig = 0.5 / (num_blocks_mc * N)
-    floor_dis = 0.5 / (num_blocks_mc * disabled_n)
-    min_errors = 100
+    _disabled_n = N - len(worst_idx)
+    _floor_orig = 0.5 / (num_blocks_mc * N)
+    _floor_dis = 0.5 / (num_blocks_mc * _disabled_n)
+    _min_errors = 100
 
     _fig, _ax = plt.subplots(figsize=(9, 5.5))
 
     # Original: PONTOS (cheio = convergido, oco = não convergido)
-    _conv_o = errors_orig >= min_errors
+    _conv_o = errors_orig >= _min_errors
     _unconv_o = ~_conv_o
     if np.any(_conv_o):
         _ax.semilogy(
-            snr_mc_db[_conv_o], safe_ser_for_plot(ser_mean_orig[_conv_o], floor_orig),
+            snr_mc_db[_conv_o], safe_ser_for_plot(ser_mean_orig[_conv_o], _floor_orig),
             marker="o", linestyle="none", markersize=6, color="C0",
             label="Média original — 32 portadoras (≥100 erros)",
         )
     if np.any(_unconv_o):
         _ax.semilogy(
-            snr_mc_db[_unconv_o], safe_ser_for_plot(ser_mean_orig[_unconv_o], floor_orig),
+            snr_mc_db[_unconv_o], safe_ser_for_plot(ser_mean_orig[_unconv_o], _floor_orig),
             marker="o", linestyle="none", markersize=6, color="C0",
             markerfacecolor="none", markeredgecolor="C0", markeredgewidth=1.2,
             label="Média original — 32 portadoras (<100 erros)",
@@ -693,27 +693,27 @@ def fig_bit_loading(
     )
 
     # Com descarte: PONTOS (cheio = convergido, oco = não convergido)
-    _conv_d = errors_disabled >= min_errors
+    _conv_d = errors_disabled >= _min_errors
     _unconv_d = ~_conv_d
     if np.any(_conv_d):
         _ax.semilogy(
-            snr_mc_db[_conv_d], safe_ser_for_plot(ser_mean_disabled[_conv_d], floor_dis),
+            snr_mc_db[_conv_d], safe_ser_for_plot(ser_mean_disabled[_conv_d], _floor_dis),
             marker="s", linestyle="none", markersize=6, color="C2",
-            label=f"Média com descarte — {disabled_n} portadoras (≥100 erros)",
+            label=f"Média com descarte — {_disabled_n} portadoras (≥100 erros)",
         )
     if np.any(_unconv_d):
         _ax.semilogy(
-            snr_mc_db[_unconv_d], safe_ser_for_plot(ser_mean_disabled[_unconv_d], floor_dis),
+            snr_mc_db[_unconv_d], safe_ser_for_plot(ser_mean_disabled[_unconv_d], _floor_dis),
             marker="s", linestyle="none", markersize=6, color="C2",
             markerfacecolor="none", markeredgecolor="C2", markeredgewidth=1.2,
-            label=f"Média com descarte — {disabled_n} portadoras (<100 erros)",
+            label=f"Média com descarte — {_disabled_n} portadoras (<100 erros)",
         )
 
     # OFDM+ZF teórica (descarte): LINHA CONTÍNUA (deve coincidir com MC)
     _ax.semilogy(
         snr_theory_db, safe_ser_for_plot(ser_ofdm_zf_theory_disabled, 1e-12),
         linestyle="-", linewidth=1.8, color="C4",
-        label=f"Média OFDM+ZF com descarte — {disabled_n} portadoras (teórica)",
+        label=f"Média OFDM+ZF com descarte — {_disabled_n} portadoras (teórica)",
     )
 
     # Ideal: LINHA CONTÍNUA
